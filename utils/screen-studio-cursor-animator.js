@@ -6,6 +6,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 
 const execAsync = promisify(exec);
+const safeExec = (cmd, opts = {}) => execAsync(cmd, { maxBuffer: 100 * 1024 * 1024, ...opts });
 
 /**
  * Screen Studio Cursor Animator
@@ -278,13 +279,13 @@ class ScreenStudioCursorAnimator {
 
     // 4. Encode frames to smooth 1080p MP4 via FFmpeg
     console.log(`[ScreenStudioCursorAnimator] Encoding final 12s 1080p video clip...`);
-    const cmd = `ffmpeg -y \
+    const cmd = `ffmpeg -y -loglevel error \
       -framerate ${fps} \
       -i "${path.join(framesDir, 'frame_%04d.png')}" \
       -c:v libx264 -preset fast -crf 17 -pix_fmt yuv420p \
       "${outputMp4Path}"`;
 
-    await execAsync(cmd);
+    await safeExec(cmd);
 
     // Cleanup frames
     try {

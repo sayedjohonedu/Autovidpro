@@ -5,6 +5,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 
 const execAsync = promisify(exec);
+const safeExec = (cmd, opts = {}) => execAsync(cmd, { maxBuffer: 100 * 1024 * 1024, ...opts });
 
 class GitHubCardRenderer {
   constructor(options = {}) {
@@ -196,7 +197,7 @@ class GitHubCardRenderer {
       [bg_with_shadow][card_front]overlay=0:0[outv]
     `;
 
-    const cmd = `ffmpeg -y \
+    const cmd = `ffmpeg -y -loglevel error \
       -stream_loop -1 -i "${this.bgVideo}" \
       -f image2 -loop 1 -i "${fullPageResizedPath}" \
       -f image2 -loop 1 -i "${crtOverlayPath}" \
@@ -206,7 +207,7 @@ class GitHubCardRenderer {
       -map "[outv]" \
       -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p "${outputMp4Path}"`;
 
-    await execAsync(cmd);
+    await safeExec(cmd);
     return outputMp4Path;
   }
 
@@ -311,7 +312,7 @@ class GitHubCardRenderer {
       [bg_with_shadow][card_front]overlay=0:0[outv]
     `;
 
-    const cmd = `ffmpeg -y \
+    const cmd = `ffmpeg -y -loglevel error \
       -stream_loop -1 -i "${this.bgVideo}" \
       -f image2 -loop 1 -i "${fsResizedPath}" \
       -f image2 -loop 1 -i "${fsOverlayPath}" \
@@ -320,7 +321,7 @@ class GitHubCardRenderer {
       -map "[outv]" \
       -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p "${outputMp4Path}"`;
 
-    await execAsync(cmd);
+    await safeExec(cmd);
     return outputMp4Path;
   }
 }

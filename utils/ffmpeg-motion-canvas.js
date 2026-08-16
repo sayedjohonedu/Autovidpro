@@ -1,6 +1,7 @@
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
+const safeExec = (cmd, opts = {}) => execPromise(cmd, { maxBuffer: 100 * 1024 * 1024, ...opts });
 const fs = require('fs/promises');
 const fsSync = require('fs');
 const path = require('path');
@@ -38,7 +39,7 @@ class FFmpegMotionCanvas {
    */
   async getMediaDimensions(mediaPath) {
     try {
-      const { stdout } = await execPromise(
+      const { stdout } = await safeExec(
         `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of json "${mediaPath}"`
       );
       const data = JSON.parse(stdout);
@@ -162,7 +163,7 @@ class FFmpegMotionCanvas {
       "${outputPath}"`;
 
     try {
-      await execPromise(cmd);
+      await safeExec(cmd);
       // Clean up temporary assets
       await fs.unlink(maskPath).catch(() => {});
       await fs.unlink(framePath).catch(() => {});
@@ -200,14 +201,23 @@ class FFmpegMotionCanvas {
     const fileEntries = clipPaths.map(p => `file '${path.resolve(p)}'`).join('\n');
     await fs.writeFile(concatListPath, fileEntries, 'utf8');
 
+    // Calculate total visual duration and probe voice audio duration
+    const totalVisualDuration = beatDurations.reduce((sum, d) => sum + (parseFloat(d) || 3.5), 0) || (clipPaths.length * 3.5);
+    let voiceDuration = totalVisualDuration;
+    try {
+      const { stdout } = await safeExec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${voiceAudioPath}"`);
+      voiceDuration = parseFloat(stdout.trim()) || totalVisualDuration;
+    } catch (_) {}
+    const sceneDuration = Math.max(totalVisualDuration, voiceDuration);
+
     // Build FFmpeg inputs and filter complex
-    const inputArgs = [`-f concat -safe 0 -i "${concatListPath}"`];
+    const inputArgs = [`-thread_queue_size 512 -f concat -safe 0 -i "${concatListPath}"`];
     let nextInputIdx = 1;
 
     // 1. Top HUD Banner input (if provided)
     let hudInputIdx = null;
     if (options.hudOverlayPath && fsSync.existsSync(options.hudOverlayPath)) {
-      inputArgs.push(`-f image2 -loop 1 -i "${options.hudOverlayPath}"`);
+      inputArgs.push(`-thread_queue_size 512 -f image2 -loop 1 -t ${sceneDuration.toFixed(2)} -i "${options.hudOverlayPath}"`);
       hudInputIdx = nextInputIdx++;
     }
 
@@ -215,13 +225,13 @@ class FFmpegMotionCanvas {
     const subInputIndices = [];
     if (subtitleChunks && subtitleChunks.length > 0) {
       subtitleChunks.forEach(c => {
-        inputArgs.push(`-f image2 -loop 1 -i "${c.pngPath}"`);
+        inputArgs.push(`-thread_queue_size 512 -f image2 -loop 1 -t ${sceneDuration.toFixed(2)} -i "${c.pngPath}"`);
         subInputIndices.push(nextInputIdx++);
       });
     }
 
     // 3. Voice Audio input
-    inputArgs.push(`-i "${voiceAudioPath}"`);
+    inputArgs.push(`-thread_queue_size 512 -i "${voiceAudioPath}"`);
     const voiceInputIdx = nextInputIdx++;
 
     // 4. BGM input (only if explicitly enabled for single standalone video)
@@ -229,25 +239,25 @@ class FFmpegMotionCanvas {
     if (options.includeBgm === true) {
       const bgmPath = options.bgm || (await this.getRandomAsset(this.bgmDir, ['.wav', '.mp3', '.m4a'])) ||
         path.join(this.bgmDir, 'clean bgm.mp3');
-      inputArgs.push(`-stream_loop -1 -i "${bgmPath}"`);
+      inputArgs.push(`-thread_queue_size 512 -stream_loop -1 -i "${bgmPath}"`);
       bgmInputIdx = nextInputIdx++;
     }
 
     // 5. Transition SFX inputs for each transition boundary
     const sfxInputs = [];
-    let cumulativeTime = 0;
+    let sfxCumulativeTime = 0;
 
     for (let i = 0; i < clipPaths.length; i++) {
       if (transitionFiles.length > 0) {
         const randomSfx = transitionFiles[Math.floor(Math.random() * transitionFiles.length)];
-        inputArgs.push(`-i "${randomSfx}"`);
+        inputArgs.push(`-thread_queue_size 512 -i "${randomSfx}"`);
         sfxInputs.push({
           inputIdx: nextInputIdx++,
-          timeMs: Math.round(cumulativeTime * 1000)
+          timeMs: Math.round(sfxCumulativeTime * 1000)
         });
       }
       const duration = beatDurations[i] || 3.5;
-      cumulativeTime += duration;
+      sfxCumulativeTime += duration;
     }
 
     // Build Video Filter Chain
@@ -257,7 +267,7 @@ class FFmpegMotionCanvas {
     // Apply Top HUD Banner first
     if (hudInputIdx !== null) {
       const nextLabel = 'v_hud';
-      videoFilter += `[${prevVideoLabel}][${hudInputIdx}:v]overlay=0:0[${nextLabel}]; `;
+      videoFilter += `[${prevVideoLabel}][${hudInputIdx}:v]overlay=0:0:eof_action=pass[${nextLabel}]; `;
       prevVideoLabel = nextLabel;
     }
 
@@ -266,7 +276,7 @@ class FFmpegMotionCanvas {
       subInputIndices.forEach((inputIdx, i) => {
         const c = subtitleChunks[i];
         const nextLabel = `v_sub_${i}`;
-        videoFilter += `[${prevVideoLabel}][${inputIdx}:v]overlay=0:0:enable='between(t,${c.start.toFixed(2)},${c.end.toFixed(2)})'[${nextLabel}]; `;
+        videoFilter += `[${prevVideoLabel}][${inputIdx}:v]overlay=0:0:enable='between(t,${c.start.toFixed(2)},${c.end.toFixed(2)})':eof_action=pass[${nextLabel}]; `;
         prevVideoLabel = nextLabel;
       });
     }
@@ -290,17 +300,17 @@ class FFmpegMotionCanvas {
 
     const fullFilterComplex = (videoFilter + audioFilter).trim();
 
-    const cmd = `ffmpeg -y \
+    const cmd = `ffmpeg -y -loglevel error \
       ${inputArgs.join(' ')} \
       -filter_complex "${fullFilterComplex}" \
       -map "[${prevVideoLabel}]" -map "[outa]" \
       -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p \
       -c:a aac -b:a 192k \
-      -shortest \
+      -t ${sceneDuration.toFixed(2)} \
       "${outputPath}"`;
 
     try {
-      await execPromise(cmd);
+      await safeExec(cmd);
       await fs.unlink(concatListPath).catch(() => {});
       this.logger.info(`Scene stitched successfully with transition SFX: ${outputPath}`);
       return outputPath;
@@ -333,7 +343,7 @@ class FFmpegMotionCanvas {
       try {
         let sum = 0;
         for (const p of sceneVideoPaths) {
-          const { stdout } = await execPromise(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${p}"`);
+          const { stdout } = await safeExec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${p}"`);
           sum += parseFloat(stdout.trim()) || 0;
         }
         totalDuration = sum || 60;
@@ -344,7 +354,7 @@ class FFmpegMotionCanvas {
       // 2. Probe BGM duration and pick a random starting offset
       let randomStart = 0;
       try {
-        const { stdout: bgmDurOut } = await execPromise(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${bgmPath}"`);
+        const { stdout: bgmDurOut } = await safeExec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${bgmPath}"`);
         const bgmTotalDuration = parseFloat(bgmDurOut.trim()) || 3000;
         const maxOffset = Math.max(0, Math.floor(bgmTotalDuration - totalDuration - 20));
         randomStart = Math.floor(Math.random() * maxOffset);
@@ -355,7 +365,7 @@ class FFmpegMotionCanvas {
 
       const fadeOutStart = Math.max(0, totalDuration - 2.5).toFixed(2);
 
-      const cmd = `ffmpeg -y \
+      const cmd = `ffmpeg -y -loglevel error \
         -f concat -safe 0 -i "${concatListPath}" \
         -ss ${randomStart} -i "${bgmPath}" \
         -filter_complex "[0:a]loudnorm=I=-14:TP=-1.5:LRA=7,acompressor=threshold=-18dB:ratio=3:attack=5:release=80:makeup=2,alimiter=limit=0.92[voice_norm]; [voice_norm]asplit=2[voice_mix][voice_sc]; [1:a]volume=${bgmVolume},afade=t=in:st=0:d=1.5,afade=t=out:st=${fadeOutStart}:d=2.5[bgm_raw]; [bgm_raw][voice_sc]sidechaincompress=threshold=0.015:ratio=4:attack=10:release=120:level_sc=1.2[bgm]; [voice_mix][bgm]amix=inputs=2:duration=first:dropout_transition=2[outa]" \
@@ -366,21 +376,21 @@ class FFmpegMotionCanvas {
         "${masterOutputPath}"`;
 
       try {
-        await execPromise(cmd);
+        await safeExec(cmd);
         await fs.unlink(concatListPath).catch(() => {});
         this.logger.info(`Master video complete with continuous BGM: ${masterOutputPath}`);
         return masterOutputPath;
       } catch (err) {
         this.logger.error(`Error with master BGM mixing, falling back to simple copy: ${err.message}`);
-        const fallbackCmd = `ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${masterOutputPath}"`;
-        await execPromise(fallbackCmd);
+        const fallbackCmd = `ffmpeg -y -loglevel error -f concat -safe 0 -i "${concatListPath}" -c copy "${masterOutputPath}"`;
+        await safeExec(fallbackCmd);
         await fs.unlink(concatListPath).catch(() => {});
         return masterOutputPath;
       }
     } else {
-      const cmd = `ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${masterOutputPath}"`;
+      const cmd = `ffmpeg -y -loglevel error -f concat -safe 0 -i "${concatListPath}" -c copy "${masterOutputPath}"`;
       try {
-        await execPromise(cmd);
+        await safeExec(cmd);
         await fs.unlink(concatListPath).catch(() => {});
         this.logger.info(`Master video complete: ${masterOutputPath}`);
         return masterOutputPath;

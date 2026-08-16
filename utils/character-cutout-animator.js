@@ -6,6 +6,7 @@ const { promisify } = require('util');
 const { PaperBannerGenerator } = require('./paper-banner-generator');
 
 const execAsync = promisify(exec);
+const safeExec = (cmd, opts = {}) => execAsync(cmd, { maxBuffer: 100 * 1024 * 1024, ...opts });
 
 // Character name: Meera
 class CharacterCutoutAnimator {
@@ -170,7 +171,7 @@ class CharacterCutoutAnimator {
       [sfx_pop][sfx_banner]amix=inputs=2:duration=first[outa]
     `.replace(/\s+/g, ' ').trim();
 
-    const cmd = `ffmpeg -y \
+    const cmd = `ffmpeg -y -loglevel error \
       -f image2 -loop 1 -i "${posePath}" \
       -f image2 -loop 1 -i "${bannerPath}" \
       -i "${sfxPop}" \
@@ -182,7 +183,7 @@ class CharacterCutoutAnimator {
       -c:a aac -b:a 192k \
       "${outputPath}"`;
 
-    await execAsync(cmd);
+    await safeExec(cmd);
     try { await fs.unlink(bannerPath); } catch (_) {}
 
     return { outputPath, duration, poseIndex, message: bannerInfo.message };
@@ -270,7 +271,7 @@ class CharacterCutoutAnimator {
       [0:a][sfx_pop][sfx_click]amix=inputs=3:duration=first[outa]
     `.replace(/\s+/g, ' ').trim();
 
-    const cmd = `ffmpeg -y \
+    const cmd = `ffmpeg -y -loglevel error \
       -i "${inputVideo}" \
       -f image2 -loop 1 -i "${posePath}" \
       -f image2 -loop 1 -i "${bannerPath}" \
@@ -283,7 +284,7 @@ class CharacterCutoutAnimator {
       -c:a aac -b:a 192k \
       "${outputVideo}"`;
 
-    await execAsync(cmd);
+    await safeExec(cmd);
     try { await fs.unlink(bannerPath); } catch (_) {}
 
     return { outputVideo, startOffsetSec, duration, poseIndex, message: bannerInfo.message };
