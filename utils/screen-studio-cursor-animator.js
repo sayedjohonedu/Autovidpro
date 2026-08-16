@@ -14,18 +14,40 @@ const execAsync = promisify(exec);
  */
 class ScreenStudioCursorAnimator {
   constructor(options = {}) {
-    this.cursorPackDir = options.cursorPackDir || path.join(
+    const internalAssetsDir = path.join(__dirname, '..', 'Assets', 'Cursors', 'macos-tahoe');
+    const localUserDir = path.join(
       process.env.HOME || '/Users/sayedjohon',
       'Documents/Broadcast/cursor_packs/cursors/sets/macos-tahoe'
     );
+    
+    if (require('fs').existsSync(internalAssetsDir)) {
+      this.cursorPackDir = options.cursorPackDir || internalAssetsDir;
+    } else {
+      this.cursorPackDir = options.cursorPackDir || localUserDir;
+    }
   }
 
   /**
-   * Load vector cursor SVG as buffer
+   * Load vector cursor SVG as buffer with automatic fallback
    */
   async loadCursorBuffer(cursorFilename, size = 64) {
-    const filePath = path.join(this.cursorPackDir, cursorFilename);
-    return await sharp(filePath).resize(size, null).png().toBuffer();
+    try {
+      const filePath = path.join(this.cursorPackDir, cursorFilename);
+      if (require('fs').existsSync(filePath)) {
+        return await sharp(filePath).resize(size, null).png().toBuffer();
+      }
+    } catch (e) {
+      // Fallback to procedural SVG if file reading fails
+    }
+
+    // Default clean Apple-style vector cursor fallback SVG
+    const fallbackSvg = Buffer.from(`
+      <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 2L18 16L12 17L9 22L7 21L10 16L4 16L4 2Z" fill="black"/>
+        <path d="M5.5 4.5L15.5 14.5L11.5 15.2L8.8 19.5L8.2 19.2L10.7 14.8L5.5 14.8L5.5 4.5Z" fill="white"/>
+      </svg>
+    `);
+    return await sharp(fallbackSvg).png().toBuffer();
   }
 
   /**
