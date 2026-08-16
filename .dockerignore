@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+data/videos
+data/cache
+logs
+temp
+.git
+.env.local
+.DS_Store

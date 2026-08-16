@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  youtube-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: youtube_automation_studio
+    restart: unless-stopped
+    ports:
+      - "3456:3456"
+    environment:
+      - PORT=3456
+      - NODE_ENV=production
+      - OMNIROUTE_BASE_URL=https://johonapi.junoverseai.com/v1
+      - OMNIROUTE_API_KEY=sk-54c433c8a5b955a8-921a07-1ca6bc8e
+      - OMNIROUTE_CHAT_MODEL=vertex/gemini-3.7-flash
+      - OMNIROUTE_IMAGE_MODEL=antigravity/gemini-3.1-flash-image
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - /media/joe/Storage/Videos/automated-segment-github:/app/data/videos
+      - /media/joe/Storage/user_cache/automated-segment-github:/app/data/cache

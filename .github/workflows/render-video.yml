@@ -1,0 +1,71 @@
+name: Cloud Long-Form Video Renderer
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_count:
+        description: 'Number of Repositories to Feature (e.g. 3, 5, 10)'
+        required: true
+        default: '5'
+      mode:
+        description: 'Discovery Mode (mixed, trending, automation, utilities)'
+        required: true
+        default: 'mixed'
+      timeframe:
+        description: 'Trending Timeframe (all, daily, weekly)'
+        required: true
+        default: 'all'
+      upload_youtube:
+        description: 'Auto-upload to YouTube'
+        type: boolean
+        default: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install System Dependencies (FFmpeg, Audio, Playwright Browsers)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libsox-fmt-all sox espeak
+          npx playwright install-deps chromium || true
+
+      - name: Install NPM Dependencies
+        run: npm ci || npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+
+      - name: Run Master Long-Form Video Compilation Pipeline
+        env:
+          OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
+          OMNIROUTE_BASE_URL: https://johonapi.junoverseai.com/v1
+          OMNIROUTE_CHAT_MODEL: vertex/gemini-3.7-flash
+          OMNIROUTE_IMAGE_MODEL: vertex/gemini-3.1-flash-image
+          GCLOUD_ADC_JSON: ${{ secrets.GCLOUD_ADC_JSON }}
+          YOUTUBE_TOKENS_JSON: ${{ secrets.YOUTUBE_TOKENS_JSON }}
+          YOUTUBE_CREDENTIALS_JSON: ${{ secrets.YOUTUBE_CREDENTIALS_JSON }}
+          TENOR_API_KEY: ${{ secrets.TENOR_API_KEY }}
+          GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
+          REPO_COUNT: ${{ github.event.inputs.repo_count }}
+          SCRAPE_MODE: ${{ github.event.inputs.mode }}
+          TIMEFRAME: ${{ github.event.inputs.timeframe }}
+        run: |
+          node create_compilation_video.js ${{ github.event.inputs.repo_count }} ${{ github.event.inputs.mode }} ${{ github.event.inputs.timeframe }}
+
+      - name: Upload Video & Thumbnail Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-master-video
+          path: |
+            data/videos/compilation_*/master_compilation_*.mp4
+            data/videos/compilation_*/master_thumbnail.png
