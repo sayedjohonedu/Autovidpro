@@ -18,10 +18,10 @@ class ThumbnailStudioGenerator {
     this.logger = new Logger('ThumbnailStudio');
     this.projectId = options.projectId || process.env.VERTEX_PROJECT_ID || 'newaug626';
     this.location = options.location || process.env.VERTEX_LOCATION || 'us-central1';
-    this.model = options.model || 'gemini-3.1-flash-image';
-    this.fallbackVertexModel = 'gemini-2.5-flash-image';
+    this.model = options.model || process.env.VERTEX_IMAGE_MODEL || 'gemini-3.1-flash-image';
+    this.fallbackVertexModel = 'gemini-3.1-flash-lite-image';
     this.adcPath = options.adcPath || path.join(process.env.HOME || '/Users/sayedjohon', '.config/gcloud/application_default_credentials.json');
-    this.characterRefPath = options.characterRefPath || path.join(__dirname, '..', 'Assets', 'Character Reference.png');
+    this.characterRefPath = options.characterRefPath || options.faceReferencePath || path.join(__dirname, '..', 'Assets', 'Character Reference.png');
     this.cachedToken = null;
     this.tokenExpiry = 0;
     this.httpsAgent = new https.Agent({ family: 4, keepAlive: true });
@@ -147,8 +147,12 @@ class ThumbnailStudioGenerator {
     customBackground = null
   }) {
     const moodDesc = this.getMoodPrompt(mood);
-    const technicalKeywords = 'hyper-realistic, 8k resolution, octane render, ray tracing, volumetric lighting, subsurface scattering, bokeh, vibrant saturation, 3D bold typography, cinematic shading, detailed texture, masterpiece.';
-    const faceAnchor = 'Using the face of the uploaded reference image, face is 100% identical and exactly similar to the reference photo face (exact same female creator with wavy dark brown hair and warm brown eyes)';
+    const activeProfile = process.env.ACTIVE_PROFILE || 'sayed_johon';
+    const isJohon = activeProfile === 'sayed_johon';
+    const technicalKeywords = 'photorealistic, ultra high detail 8k, cinematic YouTube thumbnail quality, masterwork rendering';
+    const faceAnchor = isJohon
+      ? '[MANDATORY FACE FIDELITY INSTRUCTION]: The male creator/subject in this YouTube thumbnail MUST HAVE THE EXACT SAME FACE, facial geometry, eyes, eyebrows, nose, smile/expression, facial hair, hairstyle, and real identity as the person shown in the provided reference image (Sayed Johon). Replicate the reference photo face with 100% fidelity without substituting with any generic stock model or random face'
+      : '[MANDATORY FACE FIDELITY INSTRUCTION]: The female creator in this YouTube thumbnail MUST HAVE THE EXACT SAME FACE, facial structure, eyes, nose, hairstyle, and identity as the person shown in the provided reference image with 100% fidelity';
 
     switch (archetypeId) {
       case 'total_chaos': {
@@ -208,11 +212,17 @@ STYLE & QUALITY: Tangible real-world physical textures, editorial commercial stu
   }
 
   /**
-   * Save native 16:9 image buffer
+   * Save and enforce pristine 16:9 (1920x1080) YouTube master thumbnail
    */
   async saveImage(imageBuffer, outputPath) {
     await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
-    await fs.promises.writeFile(outputPath, imageBuffer);
+    await sharp(imageBuffer)
+      .resize(1920, 1080, {
+        fit: 'cover',
+        position: 'center'
+      })
+      .png({ quality: 100, compressionLevel: 6 })
+      .toFile(outputPath);
   }
 
   /**
@@ -225,7 +235,7 @@ STYLE & QUALITY: Tangible real-world physical textures, editorial commercial stu
       refB64 = fs.readFileSync(this.characterRefPath).toString('base64');
     }
 
-    const userParts = [{ text: promptText }];
+    const userParts = [];
     if (refB64) {
       userParts.push({
         inlineData: {
@@ -234,13 +244,30 @@ STYLE & QUALITY: Tangible real-world physical textures, editorial commercial stu
         }
       });
     }
+    userParts.push({ text: promptText });
 
-    const modelsToTry = [this.model, this.fallbackVertexModel];
+    // =========================================================================
+    // NANO BANANA 2 (GEMINI 3.1 FLASH IMAGE) - HARDCODED PRIMARY PIPELINE
+    // 1. gemini-3.1-flash-image (Global Vertex AI) -> #1 Flagship Choice
+    // 2. gemini-3.1-flash-lite-image (Global Vertex AI) -> #2 High-Speed Choice
+    // 3. gemini-2.5-flash-image (us-central1) -> #5 Emergency Legacy Fallback ONLY
+    // =========================================================================
+    const modelsToTry = [
+      { model: 'gemini-3.1-flash-image', location: 'global', isPrimary: true },
+      { model: 'gemini-3.1-flash-lite-image', location: 'global', isPrimary: true },
+      { model: 'imagen-3.0-generate-002', location: 'us-central1', isPrimary: false },
+      { model: 'gemini-2.5-flash-image', location: 'us-central1', isEmergencyFallback: true }
+    ];
 
-    for (const model of modelsToTry) {
+    for (const item of modelsToTry) {
+      const model = item.model;
+      const loc = item.location;
       try {
-        const url = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${model}:generateContent`;
-        this.logger.info(`Sending thumbnail request to Google Vertex AI (${model}) with native 16:9 aspect ratio...`);
+        const url = loc === 'global'
+          ? `https://aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/global/publishers/google/models/${model}:generateContent`
+          : `https://${loc}-aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/${loc}/publishers/google/models/${model}:generateContent`;
+
+        this.logger.info(`Sending thumbnail request to Google Vertex AI (${model} in ${loc}) [Nano Banana 2 Priority]...`);
         const response = await axios.post(url, {
           contents: [{ role: 'user', parts: userParts }],
           generationConfig: {
@@ -264,11 +291,11 @@ STYLE & QUALITY: Tangible real-world physical textures, editorial commercial stu
             const rawBuffer = Buffer.from(part.inlineData.data, 'base64');
             await this.saveImage(rawBuffer, outputPath);
             this.logger.info(`✅ Native 16:9 thumbnail generated via Vertex AI (${model}) -> ${outputPath}`);
-            return { provider: 'vertex_ai', model, outputPath };
+            return { provider: 'vertex_ai', model, location: loc, outputPath };
           }
         }
       } catch (err) {
-        this.logger.warn(`Vertex AI (${model}) attempt failed: ${err.response?.data?.error?.message || err.message}`);
+        this.logger.warn(`Vertex AI (${model} in ${loc}) attempt failed: ${err.response?.data?.error?.message || err.message}`);
       }
     }
 
@@ -276,13 +303,15 @@ STYLE & QUALITY: Tangible real-world physical textures, editorial commercial stu
   }
 
   /**
-   * Secondary generator: OmniRoute Antigravity / Gemini Image models
+   * Secondary generator: OmniRoute Antigravity / Gemini 3.1 Flash Image (Nano Banana 2)
    */
   async generateWithOmniRoute(promptText, outputPath) {
+    // Priority: Nano Banana 2 (antigravity/gemini-3.1-flash-image) -> Imagen 4.0 Standard -> Imagen 4.0 Fast
     const candidateModels = [
       'antigravity/gemini-3.1-flash-image',
       'gemini/imagen-4.0-generate-001',
-      'nvidia/black-forest-labs/flux.1-dev'
+      'gemini/imagen-4.0-fast-generate-001',
+      'gemini/imagen-4.0-ultra-generate-001'
     ];
 
     for (const baseURL of this.omnirouteBaseURLs) {
@@ -296,7 +325,7 @@ STYLE & QUALITY: Tangible real-world physical textures, editorial commercial stu
             model: model,
             prompt: promptText,
             n: 1,
-            size: '1024x1024',
+            size: '1792x1024',
             response_format: 'b64_json'
           }, {
             headers: {
@@ -304,7 +333,7 @@ STYLE & QUALITY: Tangible real-world physical textures, editorial commercial stu
               'Content-Type': 'application/json'
             },
             [isHttps ? 'httpsAgent' : 'httpAgent']: agent,
-            timeout: 50000
+            timeout: 60000
           });
 
           const data = response.data?.data?.[0];

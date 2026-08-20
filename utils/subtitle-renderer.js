@@ -9,7 +9,14 @@ class SubtitleRenderer {
   async renderTimedSubtitleChunks(text, totalDuration, outputDir, sceneNum) {
     await fs.mkdir(outputDir, { recursive: true });
 
-    const words = text.split(/\s+/).filter(w => w.length > 0);
+    const cleanText = (text || '')
+      .replace(/[`*#~"“”'‘’]/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/g, '$2')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const words = cleanText.split(/\s+/).filter(w => w.length > 0);
     const chunkWordCount = 5;
     const rawChunks = [];
 

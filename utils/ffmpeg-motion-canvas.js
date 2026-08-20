@@ -107,6 +107,15 @@ class FFmpegMotionCanvas {
     const dims = await this.getMediaDimensions(activeMediaPath);
     const ar = dims.width / dims.height;
 
+    // Safety guard against degenerate 1px badges/spacers or broken media
+    if (dims.width < 100 || dims.height < 80 || ar < 0.35 || ar > 3.5) {
+      this.logger.warn(`⚠️ Degenerate media dimensions (${dims.width}x${dims.height}, AR: ${ar.toFixed(2)}): ${gifPath}. Auto-replacing with curated GIF...`);
+      const fallbackGif = path.resolve(__dirname, '..', 'Assets', 'Curated_GIFs', 'Cat typing aggressively.gif');
+      if (fsSync.existsSync(fallbackGif)) {
+        return await this.formatToFloatingCard(fallbackGif, duration, outputPath, { ...options, isRepoMedia: false });
+      }
+    }
+
     // 2. Calculate optimal bounded cinematic dimensions:
     // Near full-page (1680x880) for author screenshots/diagrams; (1420x780) for GIFs
     const isRepoAsset = options.isRepoMedia || options.isFullPageMedia;
@@ -130,8 +139,15 @@ class FFmpegMotionCanvas {
     // 3. Generate pixel-perfect custom mask & thin border frame
     const { maskPath, framePath } = await this.generateDynamicCardAssets(targetW, targetH, tempDir, clipId);
 
-    const isStaticImg = ['.png', '.jpg', '.jpeg', '.webp'].includes(path.extname(activeMediaPath).toLowerCase());
-    const mediaInputArg = isStaticImg ? `-f image2 -loop 1 -i "${activeMediaPath}"` : `-stream_loop -1 -i "${activeMediaPath}"`;
+    const ext = path.extname(activeMediaPath).toLowerCase();
+    const isStaticImg = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext);
+    const isGif = ext === '.gif';
+    let mediaInputArg = `-stream_loop -1 -i "${activeMediaPath}"`;
+    if (isStaticImg) {
+      mediaInputArg = `-f image2 -loop 1 -i "${activeMediaPath}"`;
+    } else if (isGif) {
+      mediaInputArg = `-ignore_loop 0 -i "${activeMediaPath}"`;
+    }
 
     // Dynamic Alternating Motion Profiles:
     // Profile 0: Zoom in (1.0 -> 1.08) + Left Tilt
@@ -159,7 +175,7 @@ class FFmpegMotionCanvas {
       -t ${duration} \
       -filter_complex "${filterComplex}" \
       -map "[outv]" \
-      -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p \
+      -c:v libx264 -preset veryfast -threads ${process.env.FFMPEG_THREADS || '3'} -crf 18 -pix_fmt yuv420p \
       "${outputPath}"`;
 
     try {
@@ -167,6 +183,25 @@ class FFmpegMotionCanvas {
       // Clean up temporary assets
       await fs.unlink(maskPath).catch(() => {});
       await fs.unlink(framePath).catch(() => {});
+
+      // Black-frame validation & auto-healing guard
+      try {
+        const probeFramePath = path.join(tempDir, `probe_${clipId}.png`);
+        await safeExec(`ffmpeg -y -ss 0.1 -i "${outputPath}" -vframes 1 "${probeFramePath}"`);
+        if (fsSync.existsSync(probeFramePath)) {
+          const stats = await sharp(probeFramePath).stats();
+          const avgBrightness = stats.channels.slice(0, 3).reduce((acc, c) => acc + c.mean, 0) / 3;
+          await fs.unlink(probeFramePath).catch(() => {});
+          if (avgBrightness < 8.0) {
+            this.logger.warn(`⚠️ Pitch black card detected (brightness: ${avgBrightness.toFixed(1)}). Auto-healing with verified curated GIF...`);
+            const fallbackGif = path.resolve(__dirname, '..', 'Assets', 'Curated_GIFs', 'Cat crazy on computer keyboard typing.gif');
+            if (fsSync.existsSync(fallbackGif)) {
+              return await this.formatToFloatingCard(fallbackGif, duration, outputPath, { ...options, isRepoMedia: false });
+            }
+          }
+        }
+      } catch (probeErr) {}
+
       this.logger.info(`Floating card clip rendered: ${outputPath}`);
       return outputPath;
     } catch (err) {
@@ -208,7 +243,9 @@ class FFmpegMotionCanvas {
       const { stdout } = await safeExec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${voiceAudioPath}"`);
       voiceDuration = parseFloat(stdout.trim()) || totalVisualDuration;
     } catch (_) {}
-    const sceneDuration = Math.max(totalVisualDuration, voiceDuration);
+
+    // Strictly lock scene duration to voiceDuration so visuals and voiceover end at the exact same instant (zero dead silence)
+    const sceneDuration = (voiceDuration && voiceDuration > 0.5) ? voiceDuration : totalVisualDuration;
 
     // Build FFmpeg inputs and filter complex
     const inputArgs = [`-thread_queue_size 512 -f concat -safe 0 -i "${concatListPath}"`];
@@ -271,6 +308,21 @@ class FFmpegMotionCanvas {
       prevVideoLabel = nextLabel;
     }
 
+    // Apply Character Pop-In (Meera Cutout & CTA Banner) in the same single pass
+    if (options.characterPopIn) {
+      const pop = options.characterPopIn;
+      const banInputIdx = nextInputIdx++;
+      const charInputIdx = nextInputIdx++;
+      inputArgs.push(`-thread_queue_size 512 -i "${pop.bannerPath}"`);
+      inputArgs.push(`-thread_queue_size 512 -i "${pop.charCompositePath}"`);
+
+      const nextBanLabel = 'v_meera_ban';
+      const nextCharLabel = 'v_meera_char';
+      videoFilter += `[${prevVideoLabel}][${banInputIdx}:v]overlay='${pop.bannerXExpr}':'${pop.bannerY}':eof_action=repeat:enable='between(t,${pop.bannerStartT.toFixed(2)},${pop.bannerEndT.toFixed(2)})'[${nextBanLabel}]; `;
+      videoFilter += `[${nextBanLabel}][${charInputIdx}:v]overlay=${pop.charTargetX}:'${pop.charYExpr}':eof_action=repeat:enable='between(t,${pop.charStartT.toFixed(2)},${pop.charEndT.toFixed(2)})'[${nextCharLabel}]; `;
+      prevVideoLabel = nextCharLabel;
+    }
+
     // Apply Subtitle Overlays
     if (subInputIndices.length > 0) {
       subInputIndices.forEach((inputIdx, i) => {
@@ -304,7 +356,7 @@ class FFmpegMotionCanvas {
       ${inputArgs.join(' ')} \
       -filter_complex "${fullFilterComplex}" \
       -map "[${prevVideoLabel}]" -map "[outa]" \
-      -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p \
+      -c:v libx264 -preset veryfast -threads ${process.env.FFMPEG_THREADS || '3'} -crf 18 -pix_fmt yuv420p \
       -c:a aac -b:a 192k \
       -t ${sceneDuration.toFixed(2)} \
       "${outputPath}"`;
@@ -336,7 +388,7 @@ class FFmpegMotionCanvas {
     if (options.includeBgm !== false) {
       const bgmPath = options.bgm || (await this.getRandomAsset(this.bgmDir, ['.wav', '.mp3', '.m4a'])) ||
         path.join(this.bgmDir, 'clean bgm2.mp3');
-      const bgmVolume = options.bgmVolume || 0.08;
+      const bgmVolume = options.bgmVolume || 0.22;
 
       // 1. Probe total duration of concatenated scenes
       let totalDuration = 60;
@@ -358,7 +410,7 @@ class FFmpegMotionCanvas {
         const bgmTotalDuration = parseFloat(bgmDurOut.trim()) || 3000;
         const maxOffset = Math.max(0, Math.floor(bgmTotalDuration - totalDuration - 20));
         randomStart = Math.floor(Math.random() * maxOffset);
-        this.logger.info(`🎵 Continuous BGM selected: ${path.basename(bgmPath)} (Total: ${Math.round(bgmTotalDuration)}s, Random Start: ${randomStart}s, Master Dur: ${totalDuration.toFixed(1)}s)`);
+        this.logger.info(`🎵 Continuous BGM selected: ${path.basename(bgmPath)} (Total: ${Math.round(bgmTotalDuration)}s, Random Start: ${randomStart}s, Master Dur: ${totalDuration.toFixed(1)}s, Vol: ${bgmVolume})`);
       } catch (e) {
         randomStart = 0;
       }
@@ -368,7 +420,7 @@ class FFmpegMotionCanvas {
       const cmd = `ffmpeg -y -loglevel error \
         -f concat -safe 0 -i "${concatListPath}" \
         -ss ${randomStart} -i "${bgmPath}" \
-        -filter_complex "[0:a]loudnorm=I=-14:TP=-1.5:LRA=7,acompressor=threshold=-18dB:ratio=3:attack=5:release=80:makeup=2,alimiter=limit=0.92[voice_norm]; [voice_norm]asplit=2[voice_mix][voice_sc]; [1:a]volume=${bgmVolume},afade=t=in:st=0:d=1.5,afade=t=out:st=${fadeOutStart}:d=2.5[bgm_raw]; [bgm_raw][voice_sc]sidechaincompress=threshold=0.015:ratio=4:attack=10:release=120:level_sc=1.2[bgm]; [voice_mix][bgm]amix=inputs=2:duration=first:dropout_transition=2[outa]" \
+        -filter_complex "[0:a]loudnorm=I=-14:TP=-1.5:LRA=7,acompressor=threshold=-18dB:ratio=3:attack=5:release=80:makeup=2,alimiter=limit=0.92[voice_norm]; [voice_norm]asplit=2[voice_mix][voice_sc]; [1:a]volume=${bgmVolume},afade=t=in:st=0:d=1.5,afade=t=out:st=${fadeOutStart}:d=2.5[bgm_raw]; [bgm_raw][voice_sc]sidechaincompress=threshold=0.08:ratio=2.2:attack=20:release=300:level_sc=0.8[bgm]; [voice_mix][bgm]amix=inputs=2:duration=first:dropout_transition=2[outa]" \
         -map 0:v -map "[outa]" \
         -c:v copy \
         -c:a aac -b:a 192k \

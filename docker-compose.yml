@@ -14,8 +14,13 @@ services:
       - NODE_ENV=production
       - OMNIROUTE_BASE_URL=https://johonapi.junoverseai.com/v1
       - OMNIROUTE_API_KEY=sk-54c433c8a5b955a8-921a07-1ca6bc8e
-      - OMNIROUTE_CHAT_MODEL=vertex/gemini-3.7-flash
-      - OMNIROUTE_IMAGE_MODEL=antigravity/gemini-3.1-flash-image
+      - OMNIROUTE_CHAT_MODEL=antigravity/gemini-3.6-flash-high
+      - ACTIVE_PROFILE=sayed_johon
+      - YOUTUBE_PRIVACY_STATUS=public
+      - REPO_COUNT=6
+      - FFMPEG_THREADS=3
+    cpus: 3.0
+    mem_limit: 8g
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs

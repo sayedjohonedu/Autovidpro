@@ -34,6 +34,13 @@ class PaperBannerGenerator {
         bgColor: '#181C24'
       },
       {
+        text: 'Visit junoverseai.com and peeai.com!',
+        highlight: 'junoverseai.com',
+        icon: 'rocket',
+        color: '#8B5CF6',
+        bgColor: '#181C24'
+      },
+      {
         text: 'Share with fellow developers!',
         highlight: 'Share',
         icon: 'rocket',
@@ -48,6 +55,15 @@ class PaperBannerGenerator {
         bgColor: '#181C24'
       }
     ];
+  }
+
+  escapeXml(unsafe) {
+    return String(unsafe)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
   }
 
   /**
@@ -89,6 +105,7 @@ class PaperBannerGenerator {
    */
   generateBannerSvg({ text, icon = 'bell', color = '#EF4444', width = 520, height = 96 }) {
     const iconSvg = this.getIconSvg(icon, color);
+    const safeText = this.escapeXml(text);
 
     return `
       <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
@@ -124,7 +141,7 @@ class PaperBannerGenerator {
           <text x="92" y="${height / 2 + 7}" 
                 font-family="Arial, Helvetica, sans-serif" 
                 font-size="21" font-weight="bold" fill="#F8FAFC">
-            ${text}
+            ${safeText}
           </text>
         </g>
       </svg>

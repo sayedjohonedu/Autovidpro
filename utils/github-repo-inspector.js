@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { chromium } = require('playwright');
 const fs = require('fs/promises');
+const fsSync = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
@@ -191,7 +192,14 @@ class GitHubRepoInspector {
     await fs.mkdir(outputDir, { recursive: true });
     const fullPagePath = path.join(outputDir, 'full_page_tall.png');
 
-    const browser = await chromium.launch({ headless: true });
+    const launchOptions = {
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    };
+    if (process.platform === 'linux' && fsSync.existsSync('/usr/bin/google-chrome')) {
+      launchOptions.executablePath = '/usr/bin/google-chrome';
+    }
+    const browser = await chromium.launch(launchOptions);
     const page = await browser.newPage({
       viewport: { width: 1440, height: 4200 },
       deviceScaleFactor: 2.0

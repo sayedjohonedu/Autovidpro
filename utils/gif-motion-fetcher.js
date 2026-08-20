@@ -1,6 +1,7 @@
 const axios = require('axios');
 const fs = require('fs/promises');
 const path = require('path');
+const { CuratedGIFLibrary } = require('./curated-gif-library');
 
 class SimpleLogger {
   info(msg) { console.log(`[GIFMotionFetcher] [INFO] ${msg}`); }
@@ -15,6 +16,7 @@ class GIFMotionFetcher {
     this.dbPath = path.join(process.cwd(), 'data', 'cache', 'gif_history_db.json');
     this.tenorApiKey = process.env.TENOR_API_KEY || '';
     this.giphyApiKey = process.env.GIPHY_API_KEY || '';
+    this.curatedLib = new CuratedGIFLibrary(options);
     this.sessionUsedUrls = new Set(); // Strict session deduplication
     this.globalUsedHistory = [];
     this.initCache();
@@ -47,6 +49,7 @@ class GIFMotionFetcher {
    */
   resetUsedClips() {
     this.sessionUsedUrls.clear();
+    this.curatedLib.resetSession();
   }
 
   /**
@@ -192,16 +195,38 @@ class GIFMotionFetcher {
   }
 
   /**
-   * High-level helper: Search and download first UNIQUE matching motion loop
-   * Guarantees 100% variety with persistent history and randomized candidate selection!
+   * High-level helper: Fetch matching motion GIF
+   * PRIORITY 1: Curated Local GIF Library (0 latency, perfectly relevant, zero duplicate loops)
+   * PRIORITY 2: Tenor / Web Fallback (if no local match found)
    */
-  async fetchMotionLoop(query, outputPath) {
+  async fetchMotionLoop(query, outputPath, options = {}) {
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+    // 1. Check Curated Local Library
+    const localMatch = this.curatedLib.getBestMatch(query, options);
+    if (localMatch.success && localMatch.path) {
+      await fs.copyFile(localMatch.path, outputPath);
+      const title = localMatch.item.displayTitle || localMatch.item.title || localMatch.item.filename;
+      this.logger.info(`✨ Curated Local GIF match (${localMatch.source}): "${title}" (${localMatch.item.filename})`);
+      return outputPath;
+    }
+
+    this.logger.info(`No local match for "${query}". Falling back to online web search...`);
+
+    // 2. Online search fallback
     const results = await this.searchMediaLoop(query, { limit: 15 });
     if (!results || results.length === 0) {
+      // If web fails, pick any relevant category from curated library
+      const forcedLocal = this.curatedLib.getBestMatch(query, { threshold: 0.1 });
+      if (forcedLocal.success) {
+        await fs.copyFile(forcedLocal.path, outputPath);
+        this.logger.info(`✅ Curated Library Fallback: "${forcedLocal.item.title}"`);
+        return outputPath;
+      }
       throw new Error(`No motion loops found for query: ${query}`);
     }
 
-    // Fisher-Yates random shuffle on results for maximum randomness
+    // Fisher-Yates random shuffle on results
     const shuffled = [...results];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -211,7 +236,7 @@ class GIFMotionFetcher {
     const recentHistoryUrls = new Set(this.globalUsedHistory.map(h => h.url));
     let lastError = null;
 
-    // Pass 1: Try finding a GIF that has NEVER been used in recent history
+    // Pass 1: Unused in recent history
     for (const clip of shuffled) {
       const targetUrl = clip.videoUrl || clip.gifUrl;
       if (!targetUrl) continue;
@@ -224,7 +249,7 @@ class GIFMotionFetcher {
         await this.downloadClip(targetUrl, outputPath);
         this.sessionUsedUrls.add(targetUrl);
         await this.saveHistory(targetUrl);
-        this.logger.info(`✅ Brand-New Unique GIF acquired from ${clip.source}: ${targetUrl.substring(0, 60)}...`);
+        this.logger.info(`✅ Web GIF acquired from ${clip.source}: ${targetUrl.substring(0, 60)}...`);
         return outputPath;
       } catch (err) {
         lastError = err;
@@ -240,7 +265,7 @@ class GIFMotionFetcher {
         await this.downloadClip(targetUrl, outputPath);
         this.sessionUsedUrls.add(targetUrl);
         await this.saveHistory(targetUrl);
-        this.logger.info(`✅ Unique GIF acquired (from pool) from ${clip.source}: ${targetUrl.substring(0, 60)}...`);
+        this.logger.info(`✅ Web GIF acquired (from pool) from ${clip.source}: ${targetUrl.substring(0, 60)}...`);
         return outputPath;
       } catch (err) {
         lastError = err;

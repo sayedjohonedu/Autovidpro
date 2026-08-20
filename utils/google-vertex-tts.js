@@ -53,15 +53,66 @@ class GoogleVertexTTS {
   }
 
   /**
+   * Universal Speech Sanitizer: Strips backticks, quotes, markdown formatting, and punctuation
+   * so TTS engines never speak "backquote", "quote", "asterisk", or punctuation names.
+   */
+  sanitizeSpeechText(text) {
+    if (!text) return '';
+    let cleaned = text;
+
+    // 1. Strip parenthetical cues: (pause), [applause], (music), etc.
+    cleaned = cleaned.replace(/\([a-zA-Z0-9_\s-]+\)/gi, '');
+    cleaned = cleaned.replace(/\[[a-zA-Z0-9_\s-]+\]/gi, '');
+
+    // 2. Strip backticks, double quotes, markdown bold/italic, tildes, hashes
+    cleaned = cleaned.replace(/[`*#~"“”]/g, '');
+
+    // 3. Strip standalone single quotes or backticks around words while preserving internal contractions (e.g. isn't)
+    cleaned = cleaned.replace(/[`'‘]/g, (match, offset, str) => {
+      const prev = str[offset - 1];
+      const next = str[offset + 1];
+      if (match === "'" && prev && next && /[a-zA-Z]/.test(prev) && /[a-zA-Z]/.test(next)) {
+        return "'";
+      }
+      return '';
+    });
+
+    // 4. Clean up repo slash notation (e.g. "lodash/lodash" -> "lodash")
+    cleaned = cleaned.replace(/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/g, '$2');
+
+    // 5. Normalize hyphens and underscores between words to spaces (e.g. "date-fns" -> "date fns")
+    cleaned = cleaned.replace(/(\w)[-_](\w)/g, '$1 $2');
+
+    // 6. Clean up URLs so TTS doesn't read "https colon slash slash"
+    cleaned = cleaned.replace(/https?:\/\/[^\s]+/gi, 'the website');
+
+    // 7. Clean up symbols: & -> and, @ -> at, + -> plus, % -> percent
+    cleaned = cleaned.replace(/&/g, ' and ');
+    cleaned = cleaned.replace(/@/g, ' at ');
+    cleaned = cleaned.replace(/\+/g, ' plus ');
+    cleaned = cleaned.replace(/%/g, ' percent ');
+
+    // 8. Strip leftover slashes, brackets, braces
+    cleaned = cleaned.replace(/[\\\/\[\]{}|^<>]/g, ' ');
+
+    // 9. Normalize multiple dots and whitespace
+    cleaned = cleaned.replace(/\.{2,}/g, '.');
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+    return cleaned;
+  }
+
+  /**
    * Synthesize broadcast speech with Google Cloud TTS (Supports Chirp 3 HD, Journey, Neural2)
    */
   async synthesize(text, outputPath, voiceName = 'en-GB-Chirp3-HD-Aoede') {
+    const cleanText = this.sanitizeSpeechText(text);
     const token = await this.getAccessToken();
     const langParts = voiceName.split('-');
     const languageCode = langParts.length >= 2 ? `${langParts[0]}-${langParts[1]}` : 'en-GB';
 
     const requestBody = {
-      input: { text },
+      input: { text: cleanText },
       voice: {
         languageCode,
         name: voiceName

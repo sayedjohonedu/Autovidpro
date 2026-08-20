@@ -205,7 +205,7 @@ class GitHubCardRenderer {
       -t ${duration} \
       -filter_complex "${filterGraph.replace(/\s+/g, ' ')}" \
       -map "[outv]" \
-      -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p "${outputMp4Path}"`;
+      -c:v libx264 -preset veryfast -threads ${process.env.FFMPEG_THREADS || '3'} -crf 18 -pix_fmt yuv420p "${outputMp4Path}"`;
 
     await safeExec(cmd);
     return outputMp4Path;
@@ -319,7 +319,7 @@ class GitHubCardRenderer {
       -t ${duration} \
       -filter_complex "${filterGraph.replace(/\s+/g, ' ')}" \
       -map "[outv]" \
-      -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p "${outputMp4Path}"`;
+      -c:v libx264 -preset veryfast -threads ${process.env.FFMPEG_THREADS || '3'} -crf 18 -pix_fmt yuv420p "${outputMp4Path}"`;
 
     await safeExec(cmd);
     return outputMp4Path;

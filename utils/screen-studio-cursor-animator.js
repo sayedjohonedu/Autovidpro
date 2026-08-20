@@ -1,6 +1,12 @@
+// Auto-detect Linux Playwright browsers path if installed in custom directory
+if (process.platform === 'linux' && require('fs').existsSync('/home/joe/browsers')) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = '/home/joe/browsers';
+}
+
 const { chromium } = require('playwright');
 const sharp = require('sharp');
 const fs = require('fs/promises');
+const fsSync = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
@@ -68,7 +74,14 @@ class ScreenStudioCursorAnimator {
 
     // 1. Dynamic DOM Inspection: Accurately find where README, Code, and Badges actually sit
     console.log(`[ScreenStudioCursorAnimator] Inspecting dynamic DOM layout for: ${repoName}...`);
-    const browser = await chromium.launch({ headless: true });
+    const launchOptions = {
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    };
+    if (process.platform === 'linux' && fsSync.existsSync('/usr/bin/google-chrome')) {
+      launchOptions.executablePath = '/usr/bin/google-chrome';
+    }
+    const browser = await chromium.launch(launchOptions);
     const page = await browser.newPage({
       viewport: { width: 1920, height: 1080 },
       deviceScaleFactor: 2.0 // True Apple Retina High-DPI
@@ -132,14 +145,20 @@ class ScreenStudioCursorAnimator {
     // Resize viewport to capture the full inspected page height
     const captureHeight = Math.max(3000, Math.min(domPositions.totalHeight, 5500));
     await page.setViewportSize({ width: 1920, height: captureHeight });
-    await page.waitForTimeout(500);
-
     const basePagePath = path.join(tempDir, 'base_page.png');
-    const rawScreenshot = await page.screenshot({ clip: { x: 0, y: 0, width: 1920, height: captureHeight } });
+    let rawScreenshot;
+    try {
+      rawScreenshot = await page.screenshot({ timeout: 8000, clip: { x: 0, y: 0, width: 1920, height: captureHeight } });
+    } catch (shotErr) {
+      console.warn(`[ScreenStudioCursorAnimator] Screenshot fallback: ${shotErr.message}`);
+      rawScreenshot = await sharp({
+        create: { width: 1920, height: captureHeight, channels: 4, background: { r: 13, g: 17, b: 23, alpha: 1 } }
+      }).png().toBuffer();
+    }
     await sharp(rawScreenshot)
       .resize(1920, captureHeight)
       .toFile(basePagePath);
-    await browser.close();
+    try { await browser.close(); } catch {}
 
     // 2. Prepare Vector Cursor PNGs with Sharp
     const pointerPng = await this.loadCursorBuffer('pointer-1__14-6.svg', 52);
@@ -282,7 +301,7 @@ class ScreenStudioCursorAnimator {
     const cmd = `ffmpeg -y -loglevel error \
       -framerate ${fps} \
       -i "${path.join(framesDir, 'frame_%04d.png')}" \
-      -c:v libx264 -preset fast -crf 17 -pix_fmt yuv420p \
+      -c:v libx264 -preset veryfast -threads ${process.env.FFMPEG_THREADS || '3'} -crf 17 -pix_fmt yuv420p \
       "${outputMp4Path}"`;
 
     await safeExec(cmd);

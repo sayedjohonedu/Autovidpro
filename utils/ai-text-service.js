@@ -1,7 +1,18 @@
 const OpenAI = require('openai');
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const https = require('https');
 const { Logger } = require('./logger');
 
 const PROVIDERS = {
+  vertexDirect: {
+    name: 'Google Vertex AI (Direct $300 Credit)',
+    projectId: process.env.VERTEX_PROJECT_ID || 'newaug626',
+    location: process.env.VERTEX_LOCATION || 'us-central1',
+    defaultModel: process.env.VERTEX_TEXT_MODEL || 'gemini-3.7-flash',
+    models: ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-pro']
+  },
   omniroute: {
     name: 'OmniRoute (Google Vertex / Gemini)',
     baseURL: process.env.OMNIROUTE_BASE_URL || 'https://johonapi.junoverseai.com/v1',
@@ -9,7 +20,7 @@ const PROVIDERS = {
     models: [
       'antigravity/gemini-3.6-flash-high',
       'antigravity/gemini-3.5-flash-low',
-      'antigravity/gemini-3.1-flash-lite',
+      'antigravity/gemini-2.5-flash',
       'auto/gemini'
     ],
     envKey: 'OMNIROUTE_API_KEY',
@@ -20,150 +31,156 @@ const PROVIDERS = {
     defaultModel: 'gpt-5.5',
     models: ['gpt-5.5', 'gpt-5.5-instant', 'gpt-5.4'],
     envKey: 'OPENAI_API_KEY',
-  },
-  openrouter: {
-    name: 'OpenRouter',
-    baseURL: 'https://openrouter.ai/api/v1',
-    defaultModel: 'google/gemini-3.5-flash',
-    models: ['google/gemini-3.5-flash', 'google/gemini-3.6-flash'],
-    envKey: 'OPENROUTER_API_KEY',
-  },
-  kimi: {
-    name: 'Kimi (Moonshot AI)',
-    baseURL: 'https://api.moonshot.ai/v1',
-    defaultModel: 'kimi-k2.6',
-    models: ['kimi-k2.6', 'kimi-k2.5', 'moonshot-v1-auto'],
-    envKey: 'MOONSHOT_API_KEY',
-  },
-  mimo: {
-    name: 'MiMo (Xiaomi)',
-    baseURL: 'https://api.xiaomimimo.com/v1',
-    defaultModel: 'mimo-v2.5-pro',
-    models: ['mimo-v2.5-pro', 'mimo-v2.5'],
-    envKey: 'MIMO_API_KEY',
-  },
-  glm: {
-    name: 'GLM (Zhipu AI)',
-    baseURL: 'https://api.z.ai/api/paas/v4/',
-    defaultModel: 'glm-5',
-    models: ['glm-5', 'glm-5.1'],
-    envKey: 'GLM_API_KEY',
-  },
+  }
 };
 
 class AITextService {
   constructor(credentials = {}) {
     this.logger = new Logger('AITextService');
+    this.httpsAgent = new https.Agent({ family: 4, keepAlive: true });
+    this.projectId = credentials.projectId || process.env.VERTEX_PROJECT_ID || 'newaug626';
+    this.location = credentials.location || process.env.VERTEX_LOCATION || 'us-central1';
+    this.adcPath = credentials.adcPath || path.join(process.env.HOME || '/Users/sayedjohon', '.config/gcloud/application_default_credentials.json');
+    this.cachedToken = null;
+    this.tokenExpiry = 0;
+
     this._initService(credentials);
   }
 
   _initService(credentials) {
-    // Check available API keys
-    for (const [providerKey, preset] of Object.entries(PROVIDERS)) {
-      const key = credentials[preset.envKey] || process.env[preset.envKey];
-      if (key) {
-        return this._initOpenAICompatible(preset, key);
-      }
+    // 1. Direct Vertex AI Check
+    if (process.env.GCLOUD_ADC_JSON || fs.existsSync(this.adcPath)) {
+      this.hasVertexDirect = true;
     }
 
-    // Default to OmniRoute Gemini
-    const omniKey = process.env.OMNIROUTE_API_KEY || 'sk-54c433c8a5b955a8-921a07-1ca6bc8e';
-    return this._initOpenAICompatible(PROVIDERS.omniroute, omniKey);
-  }
+    // 2. OmniRoute Client Init
+    const omniKey = credentials.OMNIROUTE_API_KEY || process.env.OMNIROUTE_API_KEY || 'sk-54c433c8a5b955a8-921a07-1ca6bc8e';
+    const omniBaseURL = credentials.OMNIROUTE_BASE_URL || process.env.OMNIROUTE_BASE_URL || 'https://johonapi.junoverseai.com/v1';
 
-  async chatCompletion(messages, options = {}) {
-    const axios = require('axios');
-    const primaryModel = options.model || this.model || 'antigravity/gemini-3.6-flash-high';
-    const maxTokens = options.maxTokens || 2048;
-    const temperature = options.temperature ?? 0.7;
-
-    const candidateModels = [
-      primaryModel,
-      'antigravity/gemini-3.6-flash-high',
-      'antigravity/gemini-3.5-flash-low',
-      'antigravity/gemini-3.1-flash-lite',
-      'auto/gemini'
-    ].filter((m, i, arr) => arr.indexOf(m) === i);
-
-    for (const model of candidateModels) {
-      try {
-        this.logger.info(`Sending chat completion to OmniRoute (${model})...`);
-        const res = await axios.post('https://johonapi.junoverseai.com/v1/chat/completions', {
-          model: model,
-          messages: messages,
-          max_tokens: maxTokens,
-          temperature: temperature,
-        }, {
-          headers: {
-            'Authorization': 'Bearer sk-54c433c8a5b955a8-921a07-1ca6bc8e',
-            'Content-Type': 'application/json'
-          },
-          timeout: 35000
-        });
-
-        if (res.data?.choices?.[0]?.message?.content) {
-          return res.data.choices[0].message.content;
-        }
-      } catch (err) {
-        this.logger.warn(`Model ${model} failed: ${err.response?.data?.error?.message || err.message}. Trying next candidate...`);
-      }
-    }
-    throw new Error('All text generation candidates failed');
-  }
-
-  _initOpenAICompatible(preset, apiKey, model) {
     this.client = new OpenAI({
-      apiKey,
-      baseURL: preset.baseURL,
+      apiKey: omniKey,
+      baseURL: omniBaseURL,
       defaultHeaders: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
       }
     });
-    this.model = model || preset.defaultModel;
-    this.providerName = preset.name;
-    this.logger.info(`${preset.name} initialized (model: ${this.model})`);
+    this.model = process.env.OMNIROUTE_CHAT_MODEL || 'antigravity/gemini-3.6-flash-high';
+    this.logger.info(`Initialized (Direct Vertex: ${this.hasVertexDirect ? 'AVAILABLE' : 'OFF'} | OmniRoute: ${omniBaseURL})`);
   }
 
-  _initGemini(apiKey, model) {
-    try {
-      const { GoogleGenAI } = require('@google/genai');
-      this.gemini = new GoogleGenAI({ apiKey });
-      this.model = model || 'gemini-3.7-flash';
-      this.logger.info(`Gemini initialized (model: ${this.model})`);
-    } catch (error) {
-      this.logger.error('Failed to initialize Gemini:', error.message);
+  async getVertexAccessToken() {
+    if (this.cachedToken && this.tokenExpiry && Date.now() < this.tokenExpiry - 60000) {
+      return this.cachedToken;
     }
+
+    let creds = null;
+    if (process.env.GCLOUD_ADC_JSON) {
+      creds = JSON.parse(process.env.GCLOUD_ADC_JSON);
+    } else if (fs.existsSync(this.adcPath)) {
+      creds = JSON.parse(fs.readFileSync(this.adcPath, 'utf8'));
+    } else {
+      throw new Error(`ADC credentials not found at ${this.adcPath}`);
+    }
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const response = await axios.post('https://oauth2.googleapis.com/token', {
+          client_id: creds.client_id,
+          client_secret: creds.client_secret,
+          refresh_token: creds.refresh_token,
+          grant_type: 'refresh_token'
+        }, {
+          httpsAgent: this.httpsAgent,
+          timeout: 10000
+        });
+
+        this.cachedToken = response.data.access_token;
+        this.tokenExpiry = Date.now() + ((response.data.expires_in || 3600) * 1000);
+        return this.cachedToken;
+      } catch (err) {
+        if (attempt === 3) throw err;
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+      }
+    }
+  }
+
+  async generateWithVertexDirect(prompt, options = {}) {
+    const token = await this.getVertexAccessToken();
+    const primaryModel = options.model || process.env.VERTEX_TEXT_MODEL || 'gemini-3.7-flash';
+    const candidateModels = Array.from(new Set([primaryModel, 'gemini-3.7-flash', 'gemini-2.5-flash']));
+    const temperature = options.temperature ?? 0.7;
+
+    let promptText = '';
+    if (Array.isArray(prompt)) {
+      promptText = prompt.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+    } else {
+      promptText = String(prompt);
+    }
+
+    const payload = {
+      contents: [{ role: 'user', parts: [{ text: promptText }] }],
+      generationConfig: {
+        temperature,
+        maxOutputTokens: options.maxTokens || 4096
+      }
+    };
+
+    if (options.responseMimeType) {
+      payload.generationConfig.responseMimeType = options.responseMimeType;
+    }
+
+    let lastError = null;
+    for (const model of candidateModels) {
+      try {
+        const isGlobal = model.startsWith('gemini-3.') || this.location === 'global';
+        const endpointHost = isGlobal ? 'aiplatform.googleapis.com' : `${this.location}-aiplatform.googleapis.com`;
+        const endpointLoc = isGlobal ? 'global' : this.location;
+        const url = `https://${endpointHost}/v1/projects/${this.projectId}/locations/${endpointLoc}/publishers/google/models/${model}:generateContent`;
+
+        const res = await axios.post(url, payload, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          httpsAgent: this.httpsAgent,
+          timeout: 30000
+        });
+
+        const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          return text;
+        }
+      } catch (err) {
+        lastError = err;
+        this.logger.warn(`Direct Vertex attempt for ${model} failed (${err.response?.status || err.message}). Trying fallback...`);
+      }
+    }
+
+    throw lastError || new Error('Direct Vertex returned empty response');
   }
 
   async generateText(prompt, options = {}) {
-    const primaryModel = options.model || this.model || 'vertex/gemini-3.7-flash';
+    // 1. Tier 1: Direct Google Cloud Vertex AI ($300 Credit, <1.0s latency)
+    if (this.hasVertexDirect) {
+      try {
+        const text = await this.generateWithVertexDirect(prompt, options);
+        return text;
+      } catch (vertexErr) {
+        this.logger.warn(`Tier 1 Direct Vertex AI failed: ${vertexErr.message}. Falling back to Tier 2 OmniRoute...`);
+      }
+    }
+
+    // 2. Tier 2: OmniRoute Gateway
+    const primaryModel = options.model || this.model || 'antigravity/gemini-3.6-flash-high';
     const maxTokens = options.maxTokens || 2048;
     const temperature = options.temperature ?? 0.7;
 
-    if (this.gemini) {
-      const response = await this.gemini.models.generateContent({
-        model: primaryModel,
-        contents: prompt,
-        config: { maxOutputTokens: maxTokens, temperature },
-      });
-      return response.text;
-    }
-
-    if (!this.client) {
-      throw new Error('No AI text provider configured');
-    }
-
-    // Strict Gemini-only priority hierarchy with automatic failover
     const candidateModels = Array.from(new Set([
       primaryModel,
-      'vertex/gemini-3.7-flash',
-      'vertex/gemini-3.6-flash',
-      'vertex/gemini-3.5-flash',
       'antigravity/gemini-3.6-flash-high',
-      'antigravity/gemini-3.6-flash-medium',
+      'antigravity/gemini-3.5-flash-low',
       'antigravity/gemini-2.5-flash',
-      'auto/gemini',
-      'auto/best-fast'
+      'auto/gemini'
     ]));
 
     let lastError = null;
@@ -176,22 +193,26 @@ class AITextService {
           max_tokens: maxTokens,
           temperature,
           stream: false,
-        }, { timeout: 15000 });
+        }, { timeout: 25000 });
 
         if (response.choices?.[0]?.message?.content) {
           return response.choices[0].message.content;
         }
       } catch (err) {
         lastError = err;
-        this.logger.warn(`Model ${model} failed: ${err.message}. Trying next Gemini candidate...`);
+        this.logger.warn(`OmniRoute model ${model} failed: ${err.message}. Trying next candidate...`);
       }
     }
 
     throw lastError || new Error('All Gemini text models failed');
   }
 
+  async chatCompletion(messages, options = {}) {
+    return this.generateText(messages, options);
+  }
+
   isAvailable() {
-    return !!(this.client || this.gemini);
+    return !!(this.hasVertexDirect || this.client);
   }
 }
 

@@ -1,126 +1,185 @@
-# 🚀 YouTube Automation Studio — Complete Project Handover Dossier (v3.0)
-
-> **Document Purpose**: This handover file provides the incoming AI agent with complete architectural context, codebase map, feature inventory, solved bugs, configuration variables, and verified workflows. Copy-paste this file into the new conversation to resume work seamlessly with zero loss of context.
-
----
-
-## 📌 1. Project Overview & Channel Identity
-
-* **Project**: Autonomous YouTube Long-Form Compilation Studio for GitHub Repositories.
-* **Workspace Path**: `/Users/sayedjohon/Documents/DEV_AREA/ssh linux/automated-segment-github`
-* **Target YouTube Channel**: **Junoverse AI Tech** (Official website: [`junoverseai.com`](https://www.junoverseai.com)).
-* **Channel Host**: **Meera** (Photorealistic host with persistent face identity via `Assets/Character Reference.png` and animated stop-motion paper-cut stickers in `Assets/Character Paper Cut Clip/`).
-* **Content Format**: Fast-paced, high-retention long-form countdown compilations (3, 5, or 10 breakout open-source tools per video, 3 to 10 minutes total runtime).
-* **Latest Verified Live Output**: [`https://youtu.be/9iXeEUhBziU`](https://youtu.be/9iXeEUhBziU) (Unlisted 1080p master video + custom `neon_mystery` thumbnail).
+# 🏛️ AUTONOMOUS VIDEO & SOCIAL MEDIA AUTOMATION STUDIO
+## Master System Architecture & Complete Handover Dossier
+**Unified Pipeline: macOS Long-Form Video Studio & Remote Linux Image Generation Engine**
+*Last Updated: 2026-08-19*
 
 ---
 
-## 🗺️ 2. High-Level Architecture & Logic Flow
+> [!NOTE]
+> This file is a direct mirror of [`AUTONOMOUS_VIDEO_AND_SOCIAL_AUTOMATION_MASTER_HANDOVER.md`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/AUTONOMOUS_VIDEO_AND_SOCIAL_AUTOMATION_MASTER_HANDOVER.md).
+> Please refer to that document or this file for the complete master handover and architecture guidelines.
+
+---
+
+## 📌 1. Project Purpose & Ecosystem Overview
+
+This project is the **Autonomous Content Production & Multi-Platform Social Media Studio** for **Sayed Johon / Junoverse AI Tech**. It automatically creates, renders, and publishes high-production videos and graphics across all major platforms with zero human intervention.
+
+The ecosystem is divided into two specialized engines across two environments:
+
+| Content Engine | Primary Environment | Schedule / Trigger | Platforms Targeted |
+| :--- | :--- | :--- | :--- |
+| **Long-Form Video Studio (This Pipeline)** | **macOS Host** (Apple Silicon GPU) | On-demand / CLI trigger (`node create_compilation_video.js 6 --profile=sayed_johon`) | **YouTube [PUBLIC]**, **Facebook Page**, **LinkedIn**, **Instagram**, **Twitter/X**, **Threads** |
+| **Automated Image Generation Engine** | **Remote Linux Server** (`joe@100.86.193.4` in Docker) | Autonomous cron (Every 40–60 minutes) | **Instagram**, **Facebook**, **LinkedIn**, **Twitter/X**, **Threads** |
+
+---
+
+## 💻 2. Workload Allocation Policy
+
+1. **Video Production MUST run on macOS**:
+   - Compiling 5–6 minute 1080p 60fps videos requires heavy video demuxing, 3D card motion animations, Screen Studio cursor flight recordings, karaoke subtitle overlays, and FFmpeg video encoding.
+   - macOS hardware acceleration (Apple Silicon VideoToolbox + fast unified memory) renders full 6-repo videos in **~15–17 minutes**. Running video rendering on the remote Linux host takes significantly longer.
+
+2. **Image Automation runs on Linux**:
+   - The image automation pipeline runs inside Docker containers on the remote Linux PC (`100.86.193.4`). It generates Nano Banana visuals, UI cards, and social posts on a 40–60 minute schedule independently.
+   - **Do NOT** run video pipeline builds on Linux; preserve Linux resources for image generation, web scrapers, and the 10-GPU Colab Swarm.
+
+---
+
+## 🎬 3. Video Studio Pipeline Architecture (macOS)
+
+```mermaid
+flowchart TD
+    A[Scrape GitHub Trending / Target Repos] --> B[Generate Script via GitHubScriptAgent]
+    B --> C[10-Rule Universal Speech Sanitizer]
+    C --> D[Google Vertex TTS Chirp 3 HD Schedar / OmniVoice]
+    D --> E[Subtitles & Word Chunks via SubtitleRenderer]
+    B --> F[Curated 177-GIF Library RAG + PlayPhrase Chunks]
+    B --> G[Screen Studio Cursor Flights & 3D UI Cards]
+    F & G & E --> H[FFmpeg Motion Canvas Assembly]
+    H --> I[Vertex AI Nano Banana 2 Custom Thumbnail]
+    I --> J[Master 1080p 60fps MP4 Compilation]
+    J --> K[Phase 8: Direct YouTube Data API Upload (PUBLIC)]
+    K --> L[Phase 10: 2-Wave Multi-Platform Social Broadcast]
+```
+
+### Core Subsystems & Guardrails:
+* **177 Curated GIF Library (`Assets/Curated_GIFs/`, `utils/curated-gif-library.js`)**:
+  - BM25 token relevance scoring, synonym expansion, and randomized candidate shuffling to guarantee 40+ unique GIFs per video with zero repetition.
+* **10-Rule Universal Speech Sanitizer (`utils/google-vertex-tts.js`, `agents/github-script-agent.js`)**:
+  - Strips backticks (`` ` ``), quotes (`"`, `'`), asterisks (`*`), headers, and cues so TTS treats tool names as clean proper nouns without speaking punctuation artifacts. Preserves natural contractions (`isn't`, `don't`).
+* **1px Spacer & Degenerate Image Guard (`create_compilation_video.js`, `utils/ffmpeg-motion-canvas.js`)**:
+  - Uses `sharp` to strip 1×33 tracking pixels and tiny badges ($\text{width} \ge 200$, $\text{height} \ge 120$, aspect ratio $0.45\text{–}3.2$). Auto-heals to curated GIFs if degenerate media is found.
+* **Zero Black Frames Auto-Healing Guard (`utils/ffmpeg-motion-canvas.js`)**:
+  - Post-render luminance validator on sliced cinema/motion clips. If black frames are detected, it automatically swaps in a curated high-contrast GIF.
+* **Thumbnail Visual Artist (`utils/thumbnail-studio-generator.js`, `sayed_johon.json`)**:
+  - Uses Google Vertex AI Nano Banana 2 (`gemini-3.1-flash-image`) with Sayed Johon's authentic face reference (`data/johon_face.png`) and anti-AI-slop physical props.
+
+---
+
+## 📡 4. 2-Wave Multi-Platform Broadcast Engine
+
+### 🌊 Wave 1: Immediate Video Release (At Video Completion)
+
+| Platform | Channel / Account | What Gets Uploaded | Delivery Method |
+| :--- | :--- | :--- | :--- |
+| **YouTube** | Junoverse AI Tech | **FULL 1080p Master Video** + Master Thumbnail + Timestamps + Tags + **PUBLIC** status | Direct YouTube Data API v3 (`YouTubeUploader`) |
+| **Facebook** | *Latest AI News* (Page) | **FULL 1080p Master Video** + 6-repo breakdown + Timestamps + Links | Buffer Account 2 via GCS CDN |
+| **LinkedIn** | *Sayed Al Johon* | **FULL 1080p Master Video** + Professional breakdown + 4K YouTube Link | Buffer Account 1 via GCS CDN |
+| **Instagram** | `@sayed_johon` | **FULL Master Video / Reel** + Carousel caption + YouTube Link | Buffer Account 2 via GCS CDN |
+| **Twitter / X** | `@johonsayed` | **Adaptive 120s HD Video Teaser** (fits 140s hard limit) + Thread + Link | Buffer Account 1 via GCS CDN |
+| **Threads** | `@sayed_johon` | **Adaptive 120s HD Video Teaser** (fits 5m duration cap) + Link | Buffer Account 2 via GCS CDN |
+
+### 🖼️ Wave 2: Social Recap & Community Discussion (+10 Minutes Later)
+* **What Gets Posted**: High-Res Master 16:9 Thumbnail Image + Detailed 6-Repository Breakdown (bullets, star ratings, direct GitHub links) + Community Question (*"Which tool are you testing first?"*).
+* **Target Channels**: Dispatched to all 5 connected social channels (Facebook, Twitter/X, LinkedIn, Instagram, Threads) to drive long-tail traffic to the YouTube release.
+
+---
+
+## 🔑 5. Credentials & Multi-Account Routing
+
+The system dynamically queries and loads multiple Buffer accounts and Google Cloud Storage:
+
+```env
+BUFFER_API_KEY=wCxSi32sR4wzc-GTanEOh6EnDjJ5Pt4EzfLAqyZkf93
+BUFFER_API_KEY_SECONDARY=8cY6qBv4DVhR1dAb4XlRpMXfYdk3BM5CqAm_IqbniMi
+BUFFER_API_KEYS=wCxSi32sR4wzc-GTanEOh6EnDjJ5Pt4EzfLAqyZkf93,8cY6qBv4DVhR1dAb4XlRpMXfYdk3BM5CqAm_IqbniMi
+GCS_BUCKET_NAME=newaug626-render-jobs
+DEFAULT_PRIVACY_STATUS=public
+YOUTUBE_PRIVACY_STATUS=public
+```
+
+### Account Routing Table
+1. **Buffer Account 1 (`wCxSi32s...`)**:
+   - **X / Twitter**: `@johonsayed` (ID: `69b66e5a7be9f8b1715a273d`)
+   - **LinkedIn**: `Sayed Al Johon` (ID: `69b66f727be9f8b1715a29a4`)
+2. **Buffer Account 2 (`8cY6qB...` - `sayedjohonedu@gmail.com`)**:
+   - **Facebook Page**: `Latest AI News` (ID: `6a8574d9ccaf649a67d55a18`)
+   - **Instagram**: `sayed_johon` (ID: `6a848fdaccaf649a67cd7864`)
+   - **Threads**: `sayed_johon` (ID: `6a8490c2ccaf649a67cd9763`)
+3. **Google Cloud Storage CDN (`newaug626-render-jobs`)**:
+   - Provides public high-speed HTTP/2 byte-range streaming URLs (`https://storage.googleapis.com/newaug626-render-jobs/broadcasts/...`) required by Buffer and Meta/X crawlers.
+
+---
+
+## 🗂️ 6. Critical File Maps & Dependency Flow
 
 ```
-[Discovery Engine] -> Live Trending (Daily/Weekly across languages) + Utilities/Automation
-        ↓
-[Inspection] -> Playwright 1440px Desktop Screenshot + Author Diagrams + README Harvest
-        ↓
-[Scriptwriting] -> Teaser Hook (Launch line) + 5 Scenes/Repo + Organic Bridge + Outro
-        ↓
-[Voiceover TTS] -> Google Cloud TTS (en-GB-Chirp3-HD-Aoede) + EBU R128 loudnorm
-        ↓
-[Motion Canvas] -> 30s Procedural Screen Flights + 3D Pan/Tilt + Movie/Meme Pop-Culture GIFs
-        ↓
-[Character Pop-ins] -> Vox-Style 6 fps Paper-Cut Stickers + Dynamic Unfolding Banners (every 25–35s)
-        ↓
-[Audio Engine] -> Unbroken Continuous 52-min BGM + Contextual SFX (Whooshes, Pops, Lasers)
-        ↓
-[Packaging Engine] -> Date-stamped Clickbait Title + Chapter Timestamps + 12 SEO Tags
-        ↓
-[Thumbnail Studio] -> Multi-Archetype (1 of 7) + Grade-3 Universal Hook + Character Sheet
-        ↓
-[Cloud / Local Dispatch] -> Local Run / Remote Linux Hermes Cron / GitHub Actions Cloud
+create_compilation_video.js  ───► Master Orchestrator (macOS entry point)
+│
+├── agents/github-script-agent.js  ───► Multi-repo script & narration synthesis
+│   └── 10-Rule Universal Speech Sanitizer
+│
+├── utils/google-vertex-tts.js     ───► Google Cloud Chirp 3 HD Schedar voiceover
+├── utils/omnivoice-tts.js         ───► OmniVoice Sayed Johon cloned voice (optional)
+│
+├── utils/curated-gif-library.js   ───► 177 Curated GIF Library RAG & scoring
+├── utils/gif-motion-fetcher.js    ───► BM25 token matching & synonym expansion
+├── utils/ffmpeg-motion-canvas.js  ───► 3D floating cards, scanlines & stitching
+├── utils/subtitle-renderer.js     ───► Karaoke subtitle overlay generator
+│
+├── utils/thumbnail-studio-generator.js ──► Vertex AI Nano Banana 2 Thumbnail
+├── utils/youtube-uploader.js      ───► YouTube Data API (Public 1080p uploader)
+│
+└── src/publishers/universalPublisher.js ──► 2-Wave Social Broadcast (Buffer GraphQL + GCS)
 ```
 
 ---
 
-## 🗂️ 3. Core File Map & Module Breakdown
+## 🛠️ 7. Operator Command Cheat Sheet
 
-| Component | File Path | Responsibilities |
-|---|---|---|
-| **Master Orchestrator** | [`create_compilation_video.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/create_compilation_video.js) | Coordinates 8 production phases (Intro, Segments 1..N, Outro, BGM, Character Pop-ins, SEO Metadata, Thumbnail, YouTube Upload). Supports flexible CLI flags (`--count=N`, `--mode=trending\|automation\|utilities\|mixed`). |
-| **Discovery Engine** | [`utils/github-trending-scraper.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/utils/github-trending-scraper.js) | Scrapes live daily/weekly GitHub trending feeds (Global, Python, TS, JS, Rust, Go) + problem-solvers. SQLite persistent memory (`data/github_trending.db`) guarantees zero repeats. |
-| **Scriptwriting Agent** | [`agents/github-script-agent.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/agents/github-script-agent.js) | Writes viral storytelling scripts. 5 scenes per repo with organic bridge transitions (Scene 5 = Verdict & Bridge, NO canned mid-video ads). Teaser intro uses varied creator kickoff lines (*"Let's jump right in!"*). Master Outro dynamically wraps up all covered tools. Website speech strictly formatted as `"juno verse ai dot com"`. |
-| **Visual Director & GIFs** | [`utils/gif-motion-fetcher.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/utils/gif-motion-fetcher.js) | Deep Visual Metaphor framework mapping voice lines to iconic movie moments (Matrix, Iron Man, Doctor Strange, Oppenheimer, F1 pit stops) and viral memes (galaxy brain, Leonardo DiCaprio, Mr. Bean). Tenor web scraper + DuckDuckGo Universal GIF engine with persistent history (`gif_history_db.json`) and Fisher-Yates randomization. |
-| **Thumbnail Studio** | [`agents/thumbnail-designer-agent.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/agents/thumbnail-designer-agent.js) <br> [`utils/thumbnail-studio-generator.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/utils/thumbnail-studio-generator.js) | Auto-picks 1 of 7 visual archetypes (`white_studio_dotgrid`, `total_chaos`, `neon_mystery`, `versus_split`, `scale_and_awe`, `minimalist_pop`, `cinematic_high_octane`). Strictly enforces Grade-3 vocabulary (2–3 words max), bans AI cliches, preserves character face identity with `Assets/Character Reference.png` via Vertex AI Nano Banana 2 (`gemini-2.5-flash-image`) / OmniRoute fallback. |
-| **Screen Studio Flights** | [`utils/screen-studio-cursor-animator.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/utils/screen-studio-cursor-animator.js) | Pre-renders 30.0s procedural full-screen 1080p cursor flights with DOM element tracking, Bézier acceleration, micro-wandering jitter, and Retina zoom depths (1.25x–1.55x). |
-| **Paper-Cut Characters** | [`utils/character-cutout-animator.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/utils/character-cutout-animator.js) <br> [`utils/paper-banner-generator.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/utils/paper-banner-generator.js) | 6 fps stop-motion character overlays (Meera) popping in every 25–35s with dynamic unfolding sticker banners (Subscribe, Like, Comment, Star, Share). |
-| **Motion Canvas & FFmpeg** | [`utils/ffmpeg-motion-canvas.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/utils/ffmpeg-motion-canvas.js) <br> [`utils/github-card-renderer.js`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/utils/github-card-renderer.js) | Cinematic 3D floating cards (1420px GIFs, 1680px repo media), 3D perspective panning, CRT scanlines, and continuous audio mixing. |
-| **Cloud CI/CD Workflow** | [`.github/workflows/render-video.yml`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/.github/workflows/render-video.yml) | GitHub Actions workflow for cloud video rendering on `ubuntu-latest` with `workflow_dispatch` inputs for `repo_count`, `mode`, and `timeframe`. |
-| **Snapshot Backup** | [`backups/v3_stable_snapshot/`](file:///Users/sayedjohon/Documents/DEV_AREA/ssh%20linux/automated-segment-github/backups/v3_stable_snapshot/) | Safe untouched snapshot of all working v3.0 core files. |
-
----
-
-## 🛠️ 4. Key Rules, Solved Quirks & Engineering Guardrails
-
-1. **TTS Website Pronunciation**:
-   * Google Cloud TTS (`en-GB-Chirp3-HD-Aoede`) stutters if domain is written as `junoverseai dot com` (it says *"junoverse dot ai dot com"*).
-   * **Rule**: Always format website speech as **`"juno verse ai dot com"`** with clean spacing. Never repeat the brand name and domain side-by-side.
-2. **Organic Script Transitions (No Mid-Video Ads)**:
-   * Scene 5 is an **Organic Verdict & Bridge Transition** written dynamically by the LLM. Canned ad injections in the middle of countdowns are strictly banned.
-3. **Intro De-duplication**:
-   * The opening teaser intro is explicitly banned from saying *"starting with number one"*. It ends with creator launch lines (*"Let's jump right in!"*, *"Check this out!"*).
-4. **Zero Video Freezes (30s Flight Slicing Buffer)**:
-   * Master Screen Studio recording is pre-rendered for a full 30.0s buffer with boundary wrap checks (`cursor + dur > 29.5 -> reset to 0`), ensuring FFmpeg stitchers are never starved of video frames.
-5. **Thumbnails Vocabulary & Visual Integrity**:
-   * All thumbnail hooks are filtered through `sanitizeHookText()` enforcing **Grade 3 simple words** (2–3 words max: `100% FREE`, `1 CLICK FIX`, `STOP!`, `OWN UI`, `CODE LEAK`, `THEY HID THIS`).
-   * Overused AI buzzwords (`UNLEASHED`, `REVOLUTIONARY`, `GAME CHANGER`, `SUPERCHARGED`) are strictly banned.
-6. **SQLite Schema**:
-   * Database `data/github_trending.db` tracks covered repos in `trending_repos_history` with columns: `repo_name`, `url`, `description`, `total_stars`, `stars_today`, `primary_language`, `category`, `video_path`, `covered_at`.
-
----
-
-## 💻 5. CLI Execution & Dispatch Commands
-
+### Trigger Full 6-Repository Video Production (macOS)
 ```bash
-# 1. Standard 5-Repository Compilation (Mixed Trending + Utilities):
-node create_compilation_video.js 5
+cd "/Users/sayedjohon/Documents/DEV_AREA/ssh linux/automated-segment-github"
+node create_compilation_video.js 6 --profile=sayed_johon
+```
 
-# 2. 10-Repository Mega Compilation (Pure Live Trending Only):
-node create_compilation_video.js 10 trending
+### Verify YouTube Status & Thumbnail
+```bash
+node -e '
+const { YouTubeUploader } = require("./utils/youtube-uploader");
+async function check() {
+  const uploader = new YouTubeUploader();
+  await uploader.initialize();
+  const res = await uploader.youtube.search.list({ part: "snippet", forMine: true, type: "video", maxResults: 3 });
+  for (const item of res.data.items) {
+    const v = (await uploader.youtube.videos.list({ part: "snippet,status", id: item.id.videoId })).data.items[0];
+    console.log(`- ID: ${v.id} | Title: "${v.snippet.title}" | Status: [${v.status.privacyStatus}]`);
+  }
+}
+check();
+'
+```
 
-# 3. Pure Automation & AI Agents (5 repos):
-node create_compilation_video.js 5 automation
-
-# 4. Pure Daily Utilities & Desktop Tools (3 repos):
-node create_compilation_video.js 3 utilities
-
-# 5. Full Flags Syntax (Ideal for Linux Hermes AI / Cron tasks):
-node create_compilation_video.js --count=5 --mode=trending --timeframe=daily --lang=python
+### Test Multi-Platform Social Broadcast Standalone
+```bash
+node -e '
+const { UniversalPublisher } = require("./src/publishers/universalPublisher.js");
+async function testBroadcast() {
+  const p = new UniversalPublisher();
+  await p.fetchChannels(true);
+  console.log("Channels:", p.channelsCache.map(c => `${c.service}: ${c.name} (${c.id})`));
+}
+testBroadcast();
+'
 ```
 
 ---
 
-## ☁️ 6. GitHub Actions Cloud Workflow Usage
+## 🛡️ 8. Handover Safety Checklist for Future AI Agents
 
-1. Go to GitHub Repository -> **Actions** -> **Cloud Long-Form Video Renderer**.
-2. Click **Run workflow** -> Set inputs:
-   * `repo_count`: `3`, `5`, or `10`
-   * `mode`: `mixed`, `trending`, `automation`, `utilities`
-   * `timeframe`: `all`, `daily`, `weekly`
-   * `upload_youtube`: `true`
-3. GitHub Actions spins up an Ubuntu VM, pulls fresh repos, renders the video with FFmpeg, generates the thumbnail, uploads to YouTube, and stores artifacts.
-
----
-
-## 🤖 7. Autonomous Cloud & Linux Architecture (Zero Local CPU/RAM)
-
-* **100% Free Cloud Compute (GitHub Actions)**:
-  * GitHub gives **2,000 free runner minutes per month** on standard accounts (and unlimited on public repos).
-  * Each 5-repo video takes only ~2–3 minutes of compute time. You can render **600 to 1,000 videos per month completely free** in the cloud.
-* **Linux Docker Autonomous Dispatcher (`joe@100.86.193.4`)**:
-  * Run a lightweight Docker container or cron task on your Linux PC.
-  * Instead of rendering locally, the Linux cron triggers GitHub Actions via one simple CLI command:
-    ```bash
-    gh workflow run render-video.yml -f repo_count=5 -f mode=mixed
-    ```
-  * GitHub Actions handles 100% of the video rendering, FFmpeg slicing, and YouTube publishing.
-* **Alternative Local Free GPU Cluster (`colab-pool`)**:
-  * You also have a 4-account Google Colab GPU cluster (`/home/joe/.local/bin/colab-pool`) on the Linux server providing **64GB VRAM (4x 16GB T4 GPUs)** completely free for heavy offline rendering and AI models.
+1. **NEVER run full video renders on Linux host**: Always execute on macOS.
+2. **NEVER allow `UniversalPublisher` to upload directly to YouTube**: YouTube uploading is strictly handled by `YouTubeUploader` in Phase 8 with full metadata and thumbnail. `UniversalPublisher` is isolated to `["twitter", "linkedin", "facebook", "instagram", "threads"]`.
+3. **NEVER strip the 10-rule speech sanitizer**: Repository names must be spoken as plain names without quotes or backticks.
+4. **NEVER hardcode Buffer Account 1 alone**: Always load both Account 1 and Account 2 keys to ensure all 5 social platforms are reached.
+5. **Always preserve the Linux Docker Image Pipeline**: It is an independent scheduled service for image posts.

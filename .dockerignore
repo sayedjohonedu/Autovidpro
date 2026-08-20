@@ -1,9 +1,8 @@
 node_modules
-npm-debug.log
 data/videos
-data/cache
-logs
-temp
+data/archive
+.env
+.agents
 .git
-.env.local
+*.log
 .DS_Store

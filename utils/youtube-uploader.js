@@ -37,7 +37,7 @@ class YouTubeUploader {
     title,
     description = '',
     tags = [],
-    privacyStatus = 'unlisted',
+    privacyStatus = process.env.YOUTUBE_PRIVACY_STATUS || 'public',
     categoryId = '28'
   }) {
     if (!this.youtube) {
@@ -106,6 +106,48 @@ class YouTubeUploader {
       privacyStatus,
       uploadedAt: new Date().toISOString()
     };
+  }
+
+  /**
+   * Upload / replace custom thumbnail on existing YouTube video
+   */
+  async setThumbnail(videoId, thumbnailPath) {
+    if (!this.youtube) {
+      await this.initialize();
+    }
+    if (!fs.existsSync(thumbnailPath)) {
+      throw new Error(`Thumbnail file not found at: ${thumbnailPath}`);
+    }
+    this.logger.info(`Uploading custom thumbnail to video ${videoId}...`);
+    const res = await this.youtube.thumbnails.set({
+      videoId: videoId,
+      media: {
+        body: fs.createReadStream(thumbnailPath)
+      }
+    });
+    this.logger.success(`✅ Custom thumbnail applied to video ${videoId}`);
+    return res.data;
+  }
+
+  /**
+   * Update privacy status of an existing YouTube video
+   */
+  async updateVideoPrivacy(videoId, privacyStatus = 'public') {
+    if (!this.youtube) {
+      await this.initialize();
+    }
+    this.logger.info(`Updating video ${videoId} privacy status to [${privacyStatus.toUpperCase()}]...`);
+    const res = await this.youtube.videos.update({
+      part: 'status',
+      requestBody: {
+        id: videoId,
+        status: {
+          privacyStatus: privacyStatus
+        }
+      }
+    });
+    this.logger.success(`✅ Video ${videoId} privacy status updated to [${privacyStatus.toUpperCase()}]!`);
+    return res.data;
   }
 }
 

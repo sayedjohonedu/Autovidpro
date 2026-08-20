@@ -18,6 +18,8 @@ const { ThumbnailDesignerAgent } = require('./agents/thumbnail-designer-agent');
 
 const execAsync = promisify(exec);
 
+const { HybridMotionFetcher } = require('./utils/hybrid-motion-fetcher');
+
 async function getAudioDuration(audioPath) {
   const cmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioPath}"`;
   const { stdout } = await execAsync(cmd);
@@ -92,12 +94,15 @@ async function runGitHubTrendingProduction() {
   const ttsEngine = new GoogleVertexTTS();
   const subRenderer = new SubtitleRenderer();
   const pinterestFetcher = new PinterestImageFetcher();
-  const gifFetcher = new GIFMotionFetcher();
+  const gifFetcher = new HybridMotionFetcher();
   const canvasEngine = new FFmpegMotionCanvas({
     bgVideo: path.join(process.cwd(), 'Assets', 'Backgrounds', 'vecteezy_digital-small-squares-animation-black-and-white-pixels-video_31095610.mp4')
   });
 
   const sceneOutputFiles = [];
+  if (gifFetcher?.resetUsedClips) {
+    gifFetcher.resetUsedClips();
+  }
 
   // 5. Render Scenes
   for (let sIdx = 0; sIdx < scriptData.scenes.length; sIdx++) {

@@ -1,8 +1,26 @@
 const { AITextService } = require('../utils/ai-text-service');
+const { CuratedGIFLibrary } = require('../utils/curated-gif-library');
+const { storylineFrameworkEngine } = require('../utils/storyline-frameworks');
 
 class GitHubScriptAgent {
   constructor(options = {}) {
     this.textService = new AITextService(options);
+    this.gifLib = new CuratedGIFLibrary(options);
+    this.frameworkEngine = storylineFrameworkEngine;
+  }
+
+  /**
+   * Deterministic cleaner for narration text
+   */
+  sanitizeNarrationText(text) {
+    if (!text) return '';
+    return text
+      .replace(/[`*#~"“”'‘’]/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/g, '$2')
+      .replace(/(\w)[-_](\w)/g, '$1 $2')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   /**
@@ -12,38 +30,92 @@ class GitHubScriptAgent {
    * @param {number} segmentIndex - Index of this segment (1-indexed)
    * @param {number} totalSegments - Total number of segments in compilation
    */
-  async generateNumberedRepoScript(repoData, readmeSummary = '', segmentIndex = 1, totalSegments = 5) {
+  async generateNumberedRepoScript(repoData, readmeSummary = '', segmentIndex = 1, totalSegments = 5, options = {}) {
     const isLastSegment = segmentIndex >= totalSegments;
     const nextSegmentNum = segmentIndex + 1;
+    const repoShort = repoData.repo.split('/')[1] || repoData.repo;
+
+    // Resolve dynamic storytelling framework for this segment
+    const rotation = this.frameworkEngine.getVideoFrameworkRotation(totalSegments);
+    const activeFramework = options.framework || rotation[(segmentIndex - 1) % rotation.length];
+
+    // Dynamic creative guidance based on segment position & active framework
+    let scene5Goal = '';
+    let hookSuggestions = '';
+
+    if (segmentIndex === 1) {
+      hookSuggestions = `Open with a strong hook introducing the first tool (${repoShort}) using the ${activeFramework.name} framework. For example: "Starting off our countdown...", "Kicking off at number one...", or "First up, meet ${repoShort}!"`;
+      scene5Goal = `Wrap up ${repoShort}'s verdict, then build curiosity by forward-teasing a powerhouse tool coming up later in the list (e.g. #4 or the grand finale). Do NOT say "wait until number two".`;
+    } else if (segmentIndex === 2) {
+      hookSuggestions = `Introduce tool #${segmentIndex} (${repoShort}) with the ${activeFramework.name} angle (e.g. "Taking the second spot...", "At number two, meet...", "Coming in at number two...").`;
+      scene5Goal = `Wrap up naturally and ask viewers to drop a LIKE if they love open-source tools. Keep it organic and conversational.`;
+    } else if (segmentIndex === 3) {
+      hookSuggestions = `Introduce tool #${segmentIndex} (${repoShort}) dynamically with the ${activeFramework.name} angle (e.g. "Moving right along to number three...", "For our third tool...", "Landing at number three...").`;
+      scene5Goal = `Wrap up naturally and give a quick shoutout to visit "juno verse ai dot com" or "pee a i dot com" for daily tutorials and AI workflows.`;
+    } else if (segmentIndex === 4) {
+      hookSuggestions = `Introduce tool #${segmentIndex} (${repoShort}) with the ${activeFramework.name} angle (e.g. "Landing at number four...", "Next up in the fourth spot...", "At number four...").`;
+      scene5Goal = `Wrap up naturally and ask an engaging question to spark discussion in the COMMENTS (${activeFramework.ctaPromptInstruction}).`;
+    } else if (segmentIndex === 5 && !isLastSegment) {
+      hookSuggestions = `Introduce tool #${segmentIndex} (${repoShort}) with high momentum using the ${activeFramework.name} angle (e.g. "At number five...", "Taking spot number five...", "Moving into number five...").`;
+      scene5Goal = `Wrap up naturally and invite viewers to SUBSCRIBE to the channel for daily open-source discoveries.`;
+    } else if (isLastSegment) {
+      hookSuggestions = `Introduce the final tool #${segmentIndex} (${repoShort}) with grand finale energy using the ${activeFramework.name} angle (e.g. "And for our grand finale at number ${segmentIndex}...", "Finally, the number ${segmentIndex} spot goes to...").`;
+      scene5Goal = `Deliver an epic conclusion for this final project, then transition smoothly into the full countdown recap.`;
+    } else {
+      hookSuggestions = `Introduce tool #${segmentIndex} (${repoShort}) naturally using the ${activeFramework.name} angle.`;
+      scene5Goal = `Conclude this tool smoothly and transition to the next chapter.`;
+    }
+
+    const isBengali = (options.language || '').toLowerCase().includes('bengali') || (options.language || '').toLowerCase().includes('bn');
+    const languageInstruction = isBengali
+      ? `CRITICAL LANGUAGE REQUIREMENT: Write all scene narration in fluent, high-energy spoken Bengali / Banglish (বাংলা / ব্যাংলিশ). Keep technical loanwords (GitHub, open-source, AI, model, API, RAM, offline) in natural phonetic English words, and the sentence structure in authentic spoken Bengali.`
+      : `Write all scene narration in clear, natural, high-energy global English.`;
+
+    const curatedCatalogSummary = this.gifLib.getLibraryPromptSummary();
 
     const systemPrompt = `You are a world-class viral tech documentary filmmaker and YouTube creator.
 Your goal is to explain an open-source GitHub project as a high-stakes, deeply fascinating story for a multi-repo compilation video.
+You MUST write 100% original, dynamic, captivating copy tailored specifically to this repository's unique features. NEVER use rigid templates or repetitive filler.
 
-CRITICAL RULES:
-1. **NEVER use the word "Imagine" or "Imagine if" or "Picture this"**. That is strictly forbidden.
-2. The script MUST start with the segment number:
-   - For Segment 1: "Starting with number one: [Repo Name]. If you are tired of [Huge Problem/Expensive Subscription], this free tool..."
-   - For Segment 2-N: "Next up at number [N]: [Repo Name]. This project has the power to [Superpower]..."
-3. **Persistent HUD Hook Title**: Provide a 2-4 word high-contrast hook title (e.g. "FREE EMAIL OSINT DETECTIVE" or "OFFLINE AI SUPERCOMPUTER").
-4. **Strict Grade 3–4 Level Vocabulary**: Simple words, short punchy sentences (6-12 words). No complex developer jargon.
-5. **Specs & Licensing**: Clearly state memory requirements (e.g. "uses almost zero RAM"), offline capability, zero paid API keys, and open-source license.
-6. **Scene 5 (Verdict & Organic Transition)**:
-   - Must be a natural, conversational conclusion for THIS repository (how to grab it, why it matters).
-   ${isLastSegment 
-     ? '- Since this is the final repository in the countdown, conclude this tool with high energy and tease the final recap wrap-up!' 
-     : `- Seamlessly tease and bridge into the next tool: "Grab this tool on GitHub from the description below. But if you think that was crazy, wait until you see number ${nextSegmentNum}..."`}
-   - DO NOT insert random out-of-place advertisements. Keep the pacing smooth and exciting.
-7. **DEEP CREATIVE VISUAL DIRECTOR (CRITICAL FOR DIVERSE GIFS & CINEMATICS)**:
-   - Act as an elite video editor matching each voiceover line to an unforgettable visual metaphor.
-   - For every visual beat (\`gif_search\` and \`pinterest_image\`), think deeply about the emotional beat and metaphor of the scene:
-     * **Speed & Velocity**: Formula 1 pit stop tire change, The Flash running, supersonic jet sonic boom, Millennium Falcon hyperspace, cheetah sprint.
-     * **Hacking / Terminal / Stealth**: The Matrix raining green code / Neo bullet dodge, Mr. Robot typing in dark room, laser tripwire grid, cybernetic eye scanning neon code.
-     * **Mind-Blown / Disbelief / Iconic Memes**: Galaxy brain expansion meme, Leonardo DiCaprio pointing at screen, Doctor Strange folding reality mirror dimension, Oppenheimer atomic shockwave, SpongeBob office fire chaos, Mr. Bean squinting confused, Michael Scott celebration.
-     * **Assembly / Superpowers / Creation**: Tony Stark Jarvis holographic assembly, robotic welding arm in automated factory, futuristic 3D blueprint unfolding, Thor summoning lightning.
-     * **Hardware & Heavy Compute**: Glowing liquid-cooled NVIDIA GPU server racks, subterranean supercomputer laboratory, quantum computer blue core, heavy bank vault door unlocking gold.
-   - **QUERY RULES**:
-     * Must be 2-4 punchy, search-friendly words that directly match iconic movie scenes, popular memes, or crisp tech visuals (e.g. "matrix neo bullet dodge", "tony stark jarvis hologram", "mr bean confused squint", "formula one pit stop", "galaxy brain meme").
-     * STRICTLY BANNED: Never output generic filler queries like "celebration crowd applause stadium", "happy dance", "shocked person", or "super cool tech".
+STORYTELLING FRAMEWORK ASSIGNED TO THIS SEGMENT:
+- Framework Archetype: ${activeFramework.name} (${activeFramework.badge})
+- Psychological Target: ${activeFramework.targetEmotion}
+- Tone & Voice: ${activeFramework.hookTone}
+- Hook Directive: ${activeFramework.hookPromptInstruction}
+- Conflict Directive: ${activeFramework.stakesPromptInstruction}
+- Verdict & CTA Directive: ${activeFramework.ctaPromptInstruction}
+
+CRITICAL SCRIPTING RULES:
+1. **NEVER use "Imagine", "Imagine if", or "Picture this"**.
+2. **ZERO BACKTICKS / QUOTES / MARKDOWN IN NARRATION**:
+   - Treat all repository and tool names as clean spoken English proper nouns.
+   - NEVER put backticks, quotation marks, asterisks, or brackets around tool names. TTS will pronounce symbols if you use them.
+3. **Scene 1 (Opening Hook)**:
+   - ${hookSuggestions}
+   - ${activeFramework.hookPromptInstruction}
+   - Immediately follow with the high-stakes problem or superpower of this repo.
+   - Keep opening phrasing varied and natural; never repeat generic formulas across segments.
+4. **Persistent HUD Hook Title**: Provide a unique 2-4 word punchy title in English matching the ${activeFramework.name} tone (e.g. "${activeFramework.hudTitleOptions.join('" or "')}").
+5. **Vocabulary & Tone**: Grade 3–4 level simplicity. Short punchy sentences (6-12 words). Zero boring corporate fluff.
+6. **Specs & Hardware**: Highlight memory footprint, 100% offline capability, zero API keys, and open-source license.
+7. **Scene 5 (Verdict & Mid-Video Goal)**:
+   - Objective for Segment #${segmentIndex}: ${scene5Goal}
+   - Write completely fresh, authentic voiceover copy fulfilling this goal.
+   - Do NOT say "wait until number ${nextSegmentNum}".
+8. **Pronunciation**: If mentioning websites, spell them out phonetically: "juno verse ai dot com" or "pee a i dot com".
+9. **VISUAL DIRECTOR (CURATED MEMES, MOVIES & CINEMATICS)**:
+   - For every visual beat, pick a punchy 2-4 word query matching the emotional beat and metaphor of the scene.
+   - PRIORITIZE OUR LOCAL CURATED GIF LIBRARY:
+${curatedCatalogSummary}
+   - Metaphor Mapping Guide:
+     * Speed & Velocity: "ishowspeed speed", "rushing mr bean", "overtake mr bean", "dirt bike speed", "future time lapse".
+     * Coding / Hacker / Terminal: "cat crazy typing code", "cat typing aggressively", "hacker hacking and dancing", "computer working", "man with laptops".
+     * Mind-Blown / Disbelief / Iconic Memes: "leonardo dicaprio cheers", "leonardo dicaprio fist bite", "mr bean omg", "mr bean confused", "monkey throwing computer", "nuclear explosion", "elon musk dancing".
+     * Assembly / Superpowers / AI Creation: "working iron man", "iron man hologram", "doctor strange magic", "power flowing thor", "super power strike", "terminator majestic look", "robotics atlas".
+     * Math / Algorithms / Deep Logic: "mathematician complex math", "very complex math woman", "sherlock holmes thinking", "i have a plan".
+     * Bugs / Glitches / Crashes: "computer bugs", "system glitching", "computer spark error", "bike fail", "hammering on leg".
+     * Business / Money / Free Value: "burning money", "sales and marketing", "selling for sale", "black friday superstore".
+     * Victory / Celebration: "leonardo dicaprio cheers", "friends confetti celebration", "mr bean celebrating", "nailed it", "sweeeet".
 
 Output MUST be STRICT JSON with this structure:
 {
@@ -52,11 +124,11 @@ Output MUST be STRICT JSON with this structure:
     {
       "sceneNumber": 1,
       "title": "The Numbered Hook",
-      "narration": "Starting with number [N]: [Repo]. If you hate paying for expensive software...",
+      "narration": "Original dynamic opening hook introducing #${segmentIndex} and its primary superpower...",
       "fallbackGifQuery": "domain specific cinematic tech",
       "visualBeats": [
         { "type": "github_fullscreen_3d", "label": "GITHUB SPOTLIGHT", "scrollTarget": "overview" },
-        { "type": "gif_search", "query": "contextual tech metaphor or reaction" },
+        { "type": "gif_search", "query": "contextual curated tech metaphor or reaction" },
         { "type": "gif_search", "query": "another unique domain-specific cinematic shot" }
       ]
     },
@@ -66,20 +138,20 @@ Output MUST be STRICT JSON with this structure:
       "narration": "It does all the heavy lifting automatically in seconds...",
       "fallbackGifQuery": "domain cinematic futuristic tech",
       "visualBeats": [
-        { "type": "repo_media", "fallbackQuery": "domain specific visual metaphor" },
-        { "type": "gif_search", "query": "domain specific movie or pop culture action" },
-        { "type": "gif_search", "query": "third unique cinematic shot for this domain" }
+        { "type": "github_fullscreen_3d", "label": "ARCHITECTURE", "scrollTarget": "readme" },
+        { "type": "gif_search", "query": "assembly or automation metaphor" },
+        { "type": "gif_search", "query": "satisfying workflow action" }
       ]
     },
     {
       "sceneNumber": 3,
-      "title": "Feature Escalation",
-      "narration": "And here is the wildest part. It also lets you...",
-      "fallbackGifQuery": "epic tech reveal cinematic",
+      "title": "Real World Problem Solved",
+      "narration": "Before this, you had to spend hours configuring complex setups...",
+      "fallbackGifQuery": "cinematic complex problem solving",
       "visualBeats": [
-        { "type": "repo_media", "fallbackQuery": "domain specific visual metaphor" },
-        { "type": "gif_search", "query": "domain specific movie or pop culture action" },
-        { "type": "gif_search", "query": "another unique domain reaction shot" }
+        { "type": "gif_search", "query": "struggle or deep logic reaction" },
+        { "type": "github_fullscreen_3d", "label": "DEEP DEMO", "scrollTarget": "overview" },
+        { "type": "gif_search", "query": "magic transformation victory" }
       ]
     },
     {
@@ -89,19 +161,19 @@ Output MUST be STRICT JSON with this structure:
       "fallbackGifQuery": "futuristic server processor neon",
       "visualBeats": [
         { "type": "pinterest_image", "query": "domain aesthetic technology visual" },
-        { "type": "gif_search", "query": "domain specific movie or pop culture action" },
+        { "type": "gif_search", "query": "curated domain specific movie or pop culture action" },
         { "type": "gif_search", "query": "speed or power cinematic shot" }
       ]
     },
     {
       "sceneNumber": 5,
       "title": "Verdict & Transition",
-      "narration": "Grab this on GitHub from the description below. Now let's move to our next tool...",
+      "narration": "Grab this on GitHub from the description below...",
       "fallbackGifQuery": "cinematic tech transition warp speed",
       "visualBeats": [
         { "type": "github_fullscreen_3d", "label": "GITHUB REPO", "scrollTarget": "codebase" },
-        { "type": "gif_search", "query": "hyperspace warp drive portal galaxy transition" },
-        { "type": "gif_search", "query": "futuristic city speed motion blur" }
+        { "type": "gif_search", "query": "leonardo dicaprio cheers victory" },
+        { "type": "gif_search", "query": "going to the future time lapse" }
       ]
     }
   ]
@@ -117,7 +189,7 @@ Description: ${repoData.description}
 README:
 ${readmeSummary.substring(0, 1500)}
 
-Generate the Segment #${segmentIndex} script with unique, cinematic visual queries in strict JSON.`;
+Generate the Segment #${segmentIndex} script with unique, curated visual queries in strict JSON.`;
 
     try {
       const raw = await this.textService.chatCompletion([
@@ -125,17 +197,53 @@ Generate the Segment #${segmentIndex} script with unique, cinematic visual queri
         { role: 'user', content: userPrompt }
       ], { temperature: 0.8 });
 
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('Could not parse JSON from response');
-      return JSON.parse(jsonMatch[0]);
+      const rawStr = typeof raw === 'string' ? raw : (raw?.content || JSON.stringify(raw));
+      let jsonStr = rawStr;
+      const startIdx = rawStr.indexOf('{');
+      const endIdx = rawStr.lastIndexOf('}');
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        jsonStr = rawStr.substring(startIdx, endIdx + 1);
+      }
+      
+      const parsed = JSON.parse(jsonStr);
+      if (parsed && Array.isArray(parsed.scenes)) {
+        parsed.scenes.forEach(sc => {
+          if (sc.narration) {
+            sc.narration = this.sanitizeNarrationText(sc.narration);
+          }
+        });
+        parsed.framework = activeFramework.id;
+        parsed.frameworkName = activeFramework.name;
+        parsed.frameworkBadge = activeFramework.badge;
+        try {
+          this.frameworkEngine.recordUsage(activeFramework.id, {
+            repo: repoData.repo,
+            hookTitle: parsed.hookTitle,
+            channel: 'youtube_video'
+          });
+        } catch (e) {}
+      }
+      return parsed;
     } catch (err) {
       console.warn(`[GitHubScriptAgent] AI fallback for Segment #${segmentIndex}: ${err.message}`);
-      const repoShort = repoData.repo.split('/')[1] || repoData.repo;
       const lang = repoData.language || 'tech';
       
-      const transitionNarration = isLastSegment
-        ? `You can grab ${repoShort} completely free on GitHub using the link in the description below! Now let's wrap up our full countdown!`
-        : `You can grab ${repoShort} completely free on GitHub right now. But if you thought that was cool, wait until you see number ${nextSegmentNum}!`;
+      let fallbackScene5Narration = '';
+      if (segmentIndex === 1) {
+        fallbackScene5Narration = `Grab ${repoShort} completely free on GitHub using the link below. But if you think that was impressive, wait until you see the secret powerhouse coming up at number four!`;
+      } else if (segmentIndex === 2) {
+        fallbackScene5Narration = `You can grab ${repoShort} completely free from the link in the description. If you are enjoying these open-source tools, please smash that like button so more developers can find this!`;
+      } else if (segmentIndex === 3) {
+        fallbackScene5Narration = `Grab this repository from the link below. By the way, if you want daily AI agent workflows and free developer tutorials, check out juno verse ai dot com or visit peeai dot com to level up your skills!`;
+      } else if (segmentIndex === 4) {
+        fallbackScene5Narration = `The GitHub link is waiting for you in the description below. Quick question: which AI workflow or open-source tool are you using the most right now? Drop your thoughts in the comments!`;
+      } else if (segmentIndex === 5 && !isLastSegment) {
+        fallbackScene5Narration = `You can clone ${repoShort} for free on GitHub right now. And make sure to hit that subscribe button to join Junoverse so you never miss our daily open-source drops!`;
+      } else if (isLastSegment) {
+        fallbackScene5Narration = `You can grab ${repoShort} completely free on GitHub using the link in the description below! Now let's wrap up our full countdown recap!`;
+      } else {
+        fallbackScene5Narration = `Grab ${repoShort} completely free on GitHub from the description below. Now let's keep moving forward!`;
+      }
 
       return {
         hookTitle: `${repoShort.toUpperCase()} OPEN SOURCE`,
@@ -143,58 +251,58 @@ Generate the Segment #${segmentIndex} script with unique, cinematic visual queri
           {
             sceneNumber: 1,
             title: "The Numbered Hook",
-            fallbackGifQuery: `${lang} hacker matrix terminal neon`,
+            fallbackGifQuery: `hacker hacking and dancing`,
             narration: segmentIndex === 1
-              ? `Starting with number one: ${repoShort}! If you want to save hundreds of hours of manual work, this free tool will blow your mind!`
-              : `Next up at number ${segmentIndex}: ${repoShort}! This repository has the power to automate your entire workflow completely for free!`,
+              ? `Starting off our list at number one: ${repoShort}! This free open-source tool will save you hundreds of hours of manual work.`
+              : `Taking spot number ${segmentIndex} is ${repoShort}! This repository gives you instant automation powers completely for free!`,
             visualBeats: [
               { type: "github_fullscreen_3d", label: "GITHUB SPOTLIGHT", scrollTarget: "overview" },
-              { type: "gif_search", query: `${repoShort} matrix cyber hacker terminal` },
-              { type: "gif_search", query: `${lang} code explosion neon cinematic` }
+              { type: "gif_search", query: `cat crazy typing code` },
+              { type: "gif_search", query: `power flowing thor superpower` }
             ]
           },
           {
             sceneNumber: 2,
             title: "The Core Superpower",
-            fallbackGifQuery: `${lang} futuristic blueprint glowing`,
+            fallbackGifQuery: `working iron man hologram`,
             narration: `It is called ${repoShort}, and it does all the heavy lifting in seconds with zero complicated setup!`,
             visualBeats: [
-              { type: "repo_media", fallbackQuery: `${lang} futuristic circuit neon blueprint` },
-              { type: "gif_search", query: `iron man suit up assembling future tech` },
-              { type: "gif_search", query: `warp speed hyperspace galaxy stars` }
+              { type: "repo_media", fallbackQuery: `doctor strange magic portal` },
+              { type: "gif_search", query: `working iron man hologram` },
+              { type: "gif_search", query: `ishowspeed speed fast` }
             ]
           },
           {
             sceneNumber: 3,
             title: "Feature Escalation",
-            fallbackGifQuery: `epic tech reveal laser beam`,
+            fallbackGifQuery: `sherlock holmes thinking`,
             narration: `And here is the wildest part. It connects with your daily apps seamlessly to give you instant superpowers!`,
             visualBeats: [
-              { type: "repo_media", fallbackQuery: `quantum computer blue core laser cooling` },
-              { type: "gif_search", query: `warp speed hyperspace stars galaxy` },
-              { type: "gif_search", query: `robot futuristic factory assembly line` }
+              { type: "repo_media", fallbackQuery: `mathematician complex math` },
+              { type: "gif_search", query: `mr bean omg shocked` },
+              { type: "gif_search", query: `robotics atlas boston dynamics` }
             ]
           },
           {
             sceneNumber: 4,
             title: "Hardware Specs & Licensing",
-            fallbackGifQuery: `glowing processor chip cyberpunk`,
+            fallbackGifQuery: `quantum computers`,
             narration: `It uses almost zero computer memory, works completely offline, requires no paid API keys, and is free forever under an open source license!`,
             visualBeats: [
-              { type: "pinterest_image", query: `glowing golden processor microchip cyberpunk motherboard` },
-              { type: "gif_search", query: `formula one race car pit stop speed` },
-              { type: "gif_search", query: `vault heavy steel door opening gold` }
+              { type: "pinterest_image", query: `quantum computers server` },
+              { type: "gif_search", query: `no internet disconnected offline` },
+              { type: "gif_search", query: `man with so many laptops` }
             ]
           },
           {
             sceneNumber: 5,
             title: "Verdict & Transition",
-            fallbackGifQuery: `hyperspace warp drive portal galaxy`,
-            narration: transitionNarration,
+            fallbackGifQuery: `leonardo dicaprio cheers`,
+            narration: fallbackScene5Narration,
             visualBeats: [
               { type: "github_fullscreen_3d", label: "GET THE CODE", scrollTarget: "codebase" },
-              { type: "gif_search", query: `hyperspace warp drive galaxy portal` },
-              { type: "gif_search", query: `futuristic city speed motion blur` }
+              { type: "gif_search", query: `leonardo dicaprio cheers victory` },
+              { type: "gif_search", query: `elon musk dancing celebration` }
             ]
           }
         ]
@@ -231,9 +339,9 @@ Output JSON schema:
   "title": "${count} Secret GitHub Tools That Feel Illegal to Know",
   "narration": "Narration for the master teaser intro (30-40 words)...",
   "teaserBeats": [
-    { "type": "pinterest_image", "query": "secret hacker underground database neon" },
-    { "type": "gif_search", "query": "mind blown explosion galaxy meme" },
-    { "type": "pinterest_image", "query": "cyberpunk supercomputer server room" }
+    { "type": "gif_search", "query": "leonardo dicaprio fist bite oh my god" },
+    { "type": "gif_search", "query": "nuclear explosion mind blown" },
+    { "type": "gif_search", "query": "power flowing thor superpower" }
   ]
 }`;
 
@@ -243,17 +351,21 @@ Output JSON schema:
         { role: 'user', content: `Repositories to feature: ${names}` }
       ], { temperature: 0.7 });
 
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) return JSON.parse(jsonMatch[0]);
+      const rawStr = typeof raw === 'string' ? raw : (raw?.content || JSON.stringify(raw));
+      const startIdx = rawStr.indexOf('{');
+      const endIdx = rawStr.lastIndexOf('}');
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        return JSON.parse(rawStr.substring(startIdx, endIdx + 1));
+      }
     } catch (e) {}
 
     return {
       title: `${count} Secret GitHub Tools That Replace Expensive Software`,
       narration: `I found ${count} secret open-source tools on GitHub that replace thousands of dollars of paid subscriptions for free. Let's get right into it!`,
       teaserBeats: [
-        { type: "pinterest_image", query: "secret hacker underground database neon" },
-        { type: "gif_search", query: "mind blown explosion galaxy meme" },
-        { type: "pinterest_image", query: "cyberpunk supercomputer server room" }
+        { type: "gif_search", query: "leonardo dicaprio fist bite oh my god" },
+        { type: "gif_search", query: "nuclear explosion mind blown" },
+        { type: "gif_search", query: "power flowing thor superpower" }
       ]
     };
   }
@@ -279,9 +391,9 @@ Output STRICT JSON:
 {
   "narration": "Natural, exciting outro narration (35-45 words)...",
   "outroBeats": [
-    { "type": "gif_search", "query": "celebration crowd victory fireworks energy" },
-    { "type": "pinterest_image", "query": "cyberpunk neon supercomputer laboratory" },
-    { "type": "gif_search", "query": "rocket launch explosion victory celebration" }
+    { "type": "gif_search", "query": "leonardo dicaprio cheers celebration" },
+    { "type": "gif_search", "query": "friends confetti celebration" },
+    { "type": "gif_search", "query": "elon musk dancing celebration" }
   ]
 }`;
 
@@ -291,16 +403,20 @@ Output STRICT JSON:
         { role: 'user', content: `Repositories covered: ${names}` }
       ], { temperature: 0.7 });
 
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) return JSON.parse(jsonMatch[0]);
+      const rawStr = typeof raw === 'string' ? raw : (raw?.content || JSON.stringify(raw));
+      const startIdx = rawStr.indexOf('{');
+      const endIdx = rawStr.lastIndexOf('}');
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        return JSON.parse(rawStr.substring(startIdx, endIdx + 1));
+      }
     } catch (e) {}
 
     return {
       narration: `And that is a wrap on our countdown! We just broke down ${count} secret open-source powerhouses: ${names}. Drop a comment below telling me which one you are installing first, and hit subscribe for fresh free tool drops every single week!`,
       outroBeats: [
-        { type: "gif_search", query: "celebration crowd victory energy" },
-        { type: "pinterest_image", query: "cyberpunk neon city skyline victory" },
-        { type: "gif_search", query: "rocket launch space explosion success" }
+        { type: "gif_search", query: "leonardo dicaprio cheers celebration" },
+        { type: "gif_search", query: "friends confetti celebration" },
+        { type: "gif_search", query: "elon musk dancing celebration" }
       ]
     };
   }
@@ -346,8 +462,12 @@ Output STRICT JSON:
         { role: 'user', content: `Repositories: ${names}` }
       ], { temperature: 0.7 });
 
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) return JSON.parse(jsonMatch[0]);
+      const rawStr = typeof raw === 'string' ? raw : (raw?.content || JSON.stringify(raw));
+      const startIdx = rawStr.indexOf('{');
+      const endIdx = rawStr.lastIndexOf('}');
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        return JSON.parse(rawStr.substring(startIdx, endIdx + 1));
+      }
     } catch (e) {}
 
     return {
