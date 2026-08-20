@@ -3,6 +3,7 @@ process.env.ACTIVE_PROFILE = process.env.ACTIVE_PROFILE || 'sayed_johon';
 
 const path = require('path');
 const fs = require('fs/promises');
+const fsSync = require('fs');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const sharp = require('sharp');
@@ -61,6 +62,16 @@ async function renderNumberedRepoSegment({
   await fs.mkdir(cardsDir, { recursive: true });
   await fs.mkdir(pinImgDir, { recursive: true });
   await fs.mkdir(mediaDir, { recursive: true });
+
+  const segmentMasterPath = path.join(segDir, `segment_${String(segmentIndex).padStart(2, '0')}_master.mp4`);
+  if (fsSync.existsSync(segmentMasterPath) && fsSync.statSync(segmentMasterPath).size > 100000) {
+    console.log(`⏩ [Cache Hit] Segment #${segmentIndex} (${repoData.repo}) already rendered at: ${segmentMasterPath}`);
+    return {
+      segmentIndex,
+      repo: repoData.repo,
+      segmentMasterPath
+    };
+  }
 
   const { inspector, cardRenderer, scriptAgent, pinterestFetcher, gifFetcher, ttsEngine, subRenderer, hudRenderer, canvasEngine, cursorAnimator, characterAnimator } = sharedEngines;
 
@@ -293,7 +304,6 @@ async function renderNumberedRepoSegment({
   }
 
   // 5. Assemble Segment Master File (Voice + SFX only)
-  const segmentMasterPath = path.join(segDir, `segment_${String(segmentIndex).padStart(2, '0')}_master.mp4`);
   await canvasEngine.assembleMasterVideo(sceneFiles, segmentMasterPath, { includeBgm: false });
   console.log(`✅ Segment #${segmentIndex} Complete (with Meera CTA): ${segmentMasterPath}`);
 

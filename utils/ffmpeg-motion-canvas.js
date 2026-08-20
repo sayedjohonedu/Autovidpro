@@ -110,9 +110,11 @@ class FFmpegMotionCanvas {
     // Safety guard against degenerate 1px badges/spacers or broken media
     if (dims.width < 100 || dims.height < 80 || ar < 0.35 || ar > 3.5) {
       this.logger.warn(`⚠️ Degenerate media dimensions (${dims.width}x${dims.height}, AR: ${ar.toFixed(2)}): ${gifPath}. Auto-replacing with curated GIF...`);
-      const fallbackGif = path.resolve(__dirname, '..', 'Assets', 'Curated_GIFs', 'Cat typing aggressively.gif');
-      if (fsSync.existsSync(fallbackGif)) {
-        return await this.formatToFloatingCard(fallbackGif, duration, outputPath, { ...options, isRepoMedia: false });
+      const { CuratedGIFLibrary } = require('./curated-gif-library');
+      const curatedLib = new CuratedGIFLibrary();
+      const fallbackRes = curatedLib.getRandomUnusedGif();
+      if (fallbackRes.success && fallbackRes.path && fsSync.existsSync(fallbackRes.path)) {
+        return await this.formatToFloatingCard(fallbackRes.path, duration, outputPath, { ...options, isRepoMedia: false });
       }
     }
 

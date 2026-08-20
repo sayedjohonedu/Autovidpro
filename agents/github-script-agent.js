@@ -109,7 +109,7 @@ CRITICAL SCRIPTING RULES:
 ${curatedCatalogSummary}
    - Metaphor Mapping Guide:
      * Speed & Velocity: "ishowspeed speed", "rushing mr bean", "overtake mr bean", "dirt bike speed", "future time lapse".
-     * Coding / Hacker / Terminal: "cat crazy typing code", "cat typing aggressively", "hacker hacking and dancing", "computer working", "man with laptops".
+     * Coding / Hacker / Terminal: "hacker hacking and dancing", "cyber matrix code terminal", "developer typing workstation", "computer working", "man with laptops", "dark room coder".
      * Mind-Blown / Disbelief / Iconic Memes: "leonardo dicaprio cheers", "leonardo dicaprio fist bite", "mr bean omg", "mr bean confused", "monkey throwing computer", "nuclear explosion", "elon musk dancing".
      * Assembly / Superpowers / AI Creation: "working iron man", "iron man hologram", "doctor strange magic", "power flowing thor", "super power strike", "terminator majestic look", "robotics atlas".
      * Math / Algorithms / Deep Logic: "mathematician complex math", "very complex math woman", "sherlock holmes thinking", "i have a plan".

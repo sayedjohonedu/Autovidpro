@@ -106,6 +106,9 @@ class GoogleVertexTTS {
    * Synthesize broadcast speech with Google Cloud TTS (Supports Chirp 3 HD, Journey, Neural2)
    */
   async synthesize(text, outputPath, voiceName = 'en-GB-Chirp3-HD-Aoede') {
+    if (outputPath && fs.existsSync(outputPath) && fs.statSync(outputPath).size > 1000) {
+      return outputPath;
+    }
     const cleanText = this.sanitizeSpeechText(text);
     const token = await this.getAccessToken();
     const langParts = voiceName.split('-');
@@ -125,22 +128,38 @@ class GoogleVertexTTS {
       }
     };
 
-    const response = await axios.post(
-      'https://texttospeech.googleapis.com/v1/text:synthesize',
-      requestBody,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'x-goog-user-project': this.projectId,
-          'Content-Type': 'application/json'
-        },
-        httpsAgent: this.httpsAgent,
-        timeout: 15000
-      }
-    );
+    let lastErr = null;
+    let response = null;
 
-    if (!response.data || !response.data.audioContent) {
-      throw new Error('No audioContent returned from Google Cloud TTS');
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        response = await axios.post(
+          'https://texttospeech.googleapis.com/v1/text:synthesize',
+          requestBody,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'x-goog-user-project': this.projectId,
+              'Content-Type': 'application/json'
+            },
+            httpsAgent: this.httpsAgent,
+            timeout: 20000
+          }
+        );
+        if (response.data && response.data.audioContent) {
+          break;
+        }
+      } catch (err) {
+        lastErr = err;
+        console.warn(`[GoogleVertexTTS] Attempt ${attempt}/3 failed (${err.response?.status || err.message}). Retrying in ${attempt * 1.5}s...`);
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, attempt * 1500));
+        }
+      }
+    }
+
+    if (!response || !response.data || !response.data.audioContent) {
+      throw new Error(`Google Cloud TTS failed after 3 attempts: ${lastErr?.message || 'No audioContent'}`);
     }
 
     const rawBuffer = Buffer.from(response.data.audioContent, 'base64');
